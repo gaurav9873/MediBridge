@@ -136,8 +136,13 @@ into everything built afterwards.
 4. Drop the two old tables.
 
 Roughly the size of the bulk-engine migration. It was deliberately not started
-in the previous commit rather than half-finished, because a partial migration
-would leave _three_ models instead of two.
+rather than half-finished, because a partial migration would leave _three_
+models instead of two.
+
+**The work is fully planned:** see
+[STEP-4-MIGRATION-PLAN.md](STEP-4-MIGRATION-PLAN.md) — measured blast radius
+(4 columns, 3 database functions, 9 source files), the exact SQL, the three
+places that need judgement rather than a rename, and the verification list.
 
 ---
 

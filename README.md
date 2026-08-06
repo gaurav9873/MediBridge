@@ -88,6 +88,7 @@ MediBridge-B2B/
     ├── SEARCH-PERFORMANCE.md  How search stays fast as the catalogue grows, with measurements
     ├── ARCHITECTURE.md     Request, auth, RLS and module flows + the non-negotiable rules
     ├── FOUNDATION-CHECKLIST.md  Freeze status of every foundation item
+    ├── STEP-4-MIGRATION-PLAN.md The last blocking item, planned and measured
     ├── MULTI-TENANCY.md    White-label SaaS architecture and migration path
     ├── UI-STANDARDS.md     The UX rules, and how the code enforces them
     └── DECISIONS.md        Architectural and product decisions, with reasoning
