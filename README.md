@@ -89,6 +89,7 @@ MediBridge-B2B/
     ├── ARCHITECTURE.md     Request, auth, RLS and module flows + the non-negotiable rules
     ├── FOUNDATION-CHECKLIST.md  Freeze status of every foundation item
     ├── STEP-4-MIGRATION-PLAN.md The last blocking item, planned and measured
+    ├── MODULE-STANDARD.md  Definition of done for every module from Phase 2 on
     ├── MULTI-TENANCY.md    White-label SaaS architecture and migration path
     ├── UI-STANDARDS.md     The UX rules, and how the code enforces them
     └── DECISIONS.md        Architectural and product decisions, with reasoning
@@ -172,19 +173,18 @@ These were taken as the recommended defaults for the MVP and can be revisited:
 
 ## What is next
 
-| Phase   | Scope                                                                               |
-| ------- | ----------------------------------------------------------------------------------- |
-| **2**   | Auth: OTP, JWT with refresh rotation, RBAC, licence verification gate               |
-| **2.5** | **Bulk operations engine** — see [docs/BULK-OPERATIONS.md](docs/BULK-OPERATIONS.md) |
-| **3**   | Catalogue: medicine master, distributor inventory, search                           |
-| **4**   | Cart and orders: stock reservation, radius logic, multi-distributor split           |
-| **5**   | Payments: Razorpay token flow, webhooks, refunds                                    |
-| **6**   | Fulfilment: accept/pack/dispatch, FEFO picking, delivery OTP                        |
-| **7**   | Notifications: SMS/email/WhatsApp on the queue built in 2.5                         |
-| **8**   | Admin: users, medicine master, reports, settings                                    |
-| **9**   | Testing and hardening                                                               |
-| **10**  | Deployment and monitoring                                                           |
+| Stage               | Scope                                                                                                                                                                        |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Foundation v1.0** | Multi-tenancy, RLS, tenant context, pluggable auth, permissions, bulk engine, search. **One item outstanding — see [FOUNDATION-CHECKLIST.md](docs/FOUNDATION-CHECKLIST.md)** |
+| **Phase 2.1**       | Authentication completion — OTP, sign-up, password reset, login UX, sessions                                                                                                 |
+| **Phase 2.2**       | Registration & onboarding — company, customer, employee                                                                                                                      |
+| **Phase 2.3**       | Company setup wizard — profile, warehouses, settings, payment terms, branding                                                                                                |
+| **Phase 2.4**       | Licence verification — upload, review, approve/reject, expiry                                                                                                                |
+| **Phase 2.5**       | Roles & permissions UI                                                                                                                                                       |
+| **Phase 2.6**       | Profile management — user, company, warehouse                                                                                                                                |
+| **Phase 3+**        | Medicine master · inventory · warehouse · bulk import UI · search · cart · orders · payments · delivery · notifications                                                      |
 
-Phase 2.5 comes before the catalogue on purpose: the medicine master and
-distributor inventory are the first two consumers of the bulk engine, and
-building them first would mean two bespoke importers to unpick later.
+Every module from Phase 2 onwards ships **end to end** — backend, UI, mobile
+layout, validation, help text, friendly errors, audit logging, permissions,
+tests and docs. See [docs/MODULE-STANDARD.md](docs/MODULE-STANDARD.md); nine of
+ten does not count as done.
