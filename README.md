@@ -5,8 +5,12 @@ Retailers search, order, and pay a 20% token to confirm; the remaining 80% is pa
 cash on delivery. Same-Day delivery is offered when a distributor is inside their
 configured radius, otherwise Next-Day.
 
-**Status:** Phases 0, 1 and 1.5 complete — foundation, database and design system.
-Feature development starts at Phase 2.
+**Status:** Phases 0, 1, 1.5, part of 2 (auth + admin) and 2.5 (bulk engine + search)
+are built and running.
+
+A move to **multi-tenant white-label SaaS** is proposed in
+[docs/MULTI-TENANCY.md](docs/MULTI-TENANCY.md). It is designed but not built, and
+it changes the shape of the current marketplace model — read that first.
 
 ---
 
@@ -78,6 +82,7 @@ MediBridge-B2B/
     ├── DEV-ACCOUNTS.md     Sign-in details for the seeded development data
     ├── BULK-OPERATIONS.md  The shared import/export engine, and why it is shaped that way
     ├── SEARCH-PERFORMANCE.md  How search stays fast as the catalogue grows, with measurements
+    ├── MULTI-TENANCY.md    Proposed white-label SaaS architecture — design, not yet built
     ├── UI-STANDARDS.md     The UX rules, and how the code enforces them
     └── DECISIONS.md        Architectural and product decisions, with reasoning
 ```
