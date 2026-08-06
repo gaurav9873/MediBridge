@@ -87,6 +87,7 @@ MediBridge-B2B/
     ├── BULK-OPERATIONS.md  The shared import/export engine, and why it is shaped that way
     ├── SEARCH-PERFORMANCE.md  How search stays fast as the catalogue grows, with measurements
     ├── ARCHITECTURE.md     Request, auth, RLS and module flows + the non-negotiable rules
+    ├── FOUNDATION-CHECKLIST.md  Freeze status of every foundation item
     ├── MULTI-TENANCY.md    White-label SaaS architecture and migration path
     ├── UI-STANDARDS.md     The UX rules, and how the code enforces them
     └── DECISIONS.md        Architectural and product decisions, with reasoning
