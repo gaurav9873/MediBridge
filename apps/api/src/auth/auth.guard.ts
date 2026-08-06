@@ -9,6 +9,7 @@ import { Reflector } from '@nestjs/core'
 import { ApiErrorCode, type SessionUser, type UserRole } from '@medibridge/types'
 import type { Request } from 'express'
 import { AppException } from '../common/errors/app-exception'
+import { TenantContextService } from '../tenancy/tenant-context'
 import { AuthService } from './auth.service'
 import { TokenService } from './token.service'
 
@@ -50,6 +51,7 @@ export class AuthGuard implements CanActivate {
     private readonly reflector: Reflector,
     private readonly tokens: TokenService,
     private readonly auth: AuthService,
+    private readonly tenant: TenantContextService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -76,6 +78,25 @@ export class AuthGuard implements CanActivate {
     if (!user) throw new AppException(ApiErrorCode.SESSION_EXPIRED)
 
     request.user = user
+
+    /*
+     * Refine the tenant now that the session is known.
+     *
+     * The middleware could only use host, path and headers. An ordinary API
+     * call carries none of those, so this is where most requests actually get
+     * their tenant — and where a mismatch between the portal's tenant and the
+     * user's own is caught.
+     */
+    const tenantContext = this.tenant.get()
+    if (tenantContext) {
+      if (tenantContext.companyId && user.companyId && tenantContext.companyId !== user.companyId) {
+        // The portal says one tenant, the session says another. Refuse rather
+        // than silently preferring one.
+        throw new AppException(ApiErrorCode.FORBIDDEN)
+      }
+      tenantContext.companyId = tenantContext.companyId ?? user.companyId
+      tenantContext.isPlatformOwner = user.companyId === null && user.role === 'ADMIN'
+    }
 
     const required = this.reflector.getAllAndOverride<UserRole[]>(ROLES_KEY, [
       context.getHandler(),

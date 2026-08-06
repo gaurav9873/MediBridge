@@ -71,5 +71,65 @@ export default tseslint.config(
     },
   },
 
+  /*
+   * ARCHITECTURE RULE 1 — tenant modules never touch PrismaService directly.
+   *
+   * PrismaService uses the owner connection, which BYPASSES Row-Level Security.
+   * One direct import in one service is a cross-tenant leak that no test would
+   * notice, because the query looks perfectly correct.
+   *
+   * Tenant data goes through TenantPrismaService, which runs inside a
+   * transaction with app.company_id set. The exceptions below are the
+   * infrastructure that has to hold the raw client, plus platform-owner
+   * surfaces that are tenant-wide by definition.
+   */
+  {
+    files: ['apps/api/src/**/*.ts'],
+    ignores: [
+      'apps/api/src/common/prisma/**',
+      'apps/api/src/tenancy/**',
+      'apps/api/src/auth/**',
+      'apps/api/src/health/**',
+      'apps/api/src/admin/**',
+      'apps/api/src/generated/**',
+      // PENDING: the bulk engine runs in the worker process, outside any
+      // request, so it needs TenantPrismaService.runAs(companyId) rather than
+      // run(). Migrating it is tracked as the next foundation task; the
+      // exception is scoped to these files so the rule protects everything else.
+      'apps/api/src/bulk/**',
+    ],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['**/common/prisma/prisma.service', '**/prisma/prisma.service'],
+              message:
+                'Tenant modules must not use PrismaService — it bypasses Row-Level Security. Use TenantPrismaService. See docs/ARCHITECTURE.md.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+
+  /*
+   * ARCHITECTURE RULE 2 — controllers hold no business logic.
+   *
+   * A controller translates HTTP to a service call and back. Keeping it that
+   * thin is what lets the mobile app, the public API and background jobs reuse
+   * the same services instead of re-implementing the rules.
+   */
+  {
+    files: ['apps/api/src/**/*.controller.ts'],
+    rules: {
+      'max-lines-per-function': [
+        'warn',
+        { max: 30, skipComments: true, skipBlankLines: true },
+      ],
+    },
+  },
+
   prettier,
 )

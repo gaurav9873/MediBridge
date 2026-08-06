@@ -8,9 +8,13 @@ configured radius, otherwise Next-Day.
 **Status:** Phases 0, 1, 1.5, part of 2 (auth + admin) and 2.5 (bulk engine + search)
 are built and running.
 
-A move to **multi-tenant white-label SaaS** is proposed in
-[docs/MULTI-TENANCY.md](docs/MULTI-TENANCY.md). It is designed but not built, and
-it changes the shape of the current marketplace model — read that first.
+The platform is **multi-tenant**: many companies run their own isolated business
+on it, in either MARKETPLACE or PRIVATE_DISTRIBUTOR mode, chosen by
+configuration rather than by forking the codebase.
+
+**Read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) before adding a module.** It
+covers the request, authentication, authorisation and Row-Level Security flows,
+and the six rules — two enforced by lint, one by the API refusing to start.
 
 ---
 
@@ -82,7 +86,8 @@ MediBridge-B2B/
     ├── DEV-ACCOUNTS.md     Sign-in details for the seeded development data
     ├── BULK-OPERATIONS.md  The shared import/export engine, and why it is shaped that way
     ├── SEARCH-PERFORMANCE.md  How search stays fast as the catalogue grows, with measurements
-    ├── MULTI-TENANCY.md    Proposed white-label SaaS architecture — design, not yet built
+    ├── ARCHITECTURE.md     Request, auth, RLS and module flows + the non-negotiable rules
+    ├── MULTI-TENANCY.md    White-label SaaS architecture and migration path
     ├── UI-STANDARDS.md     The UX rules, and how the code enforces them
     └── DECISIONS.md        Architectural and product decisions, with reasoning
 ```

@@ -1,8 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common'
 import { ApiErrorCode, type MedicineSearchInput } from '@medibridge/types'
 import { AppException } from '../common/errors/app-exception'
-import { PrismaService } from '../common/prisma/prisma.service'
 import { RedisService } from '../common/redis/redis.service'
+import { TenantPrismaService } from '../tenancy/tenant-prisma.service'
 
 export interface SearchResultOffer {
   distributorId: string
@@ -69,19 +69,29 @@ export class SearchService {
   /** Offers considered in total before collapsing to one row per medicine. */
   private static readonly MERGE_LIMIT = 400
 
+  /*
+   * TenantPrismaService, not PrismaService.
+   *
+   * Every query below runs inside a transaction with app.company_id set, so
+   * Row-Level Security applies — including the two raw SQL queries, where a
+   * hand-written WHERE would otherwise be the only thing standing between one
+   * tenant's search results and another's stock.
+   */
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly db: TenantPrismaService,
     private readonly redis: RedisService,
   ) {}
 
   async search(retailerUserId: string, input: MedicineSearchInput): Promise<SearchResult> {
     const startedAt = Date.now()
 
-    const address = await this.prisma.address.findFirst({
-      where: { userId: retailerUserId, deletedAt: null },
-      orderBy: { isDefault: 'desc' },
-      select: { id: true, latitude: true, longitude: true },
-    })
+    const address = await this.db.run((tx) =>
+      tx.address.findFirst({
+        where: { userId: retailerUserId, deletedAt: null },
+        orderBy: { isDefault: 'desc' },
+        select: { id: true, latitude: true, longitude: true },
+      }),
+    )
     if (!address) {
       throw new AppException(ApiErrorCode.VALIDATION_FAILED, {
         fields: [
@@ -134,7 +144,8 @@ export class SearchService {
     // excluded before their own radius is checked.
     const MAX_REACH_METRES = 200_000
 
-    return this.prisma.$queryRaw<NearbyDistributor[]>`
+    return this.db.run(
+      (tx) => tx.$queryRaw<NearbyDistributor[]>`
       SELECT dp.id,
              dp."businessName",
              ROUND((ST_Distance(hub.location, ST_SetSRID(ST_MakePoint(${longitude}, ${latitude}), 4326)::geography) / 1000)::numeric, 1)::float8 AS "distanceKm",
@@ -148,7 +159,8 @@ export class SearchService {
               ${MAX_REACH_METRES}
             )
       ORDER BY "distanceKm" ASC
-    `
+    `,
+    )
   }
 
   /**
@@ -184,22 +196,23 @@ export class SearchService {
 
     // Built as text because LATERAL + dynamic ORDER BY is beyond Prisma's
     // typed query builder. Every value is still a bound parameter.
-    const rows = await this.prisma.$queryRawUnsafe<
-      Array<{
-        medicineId: string
-        distributorId: string
-        name: string
-        brand: string
-        composition: string
-        form: string
-        bestPricePaise: number
-        mrpPaise: number
-        totalAvailable: number
-        minOrderQuantity: number
-        latestExpiry: Date
-      }>
-    >(
-      `
+    const rows = await this.db.run((tx) =>
+      tx.$queryRawUnsafe<
+        Array<{
+          medicineId: string
+          distributorId: string
+          name: string
+          brand: string
+          composition: string
+          form: string
+          bestPricePaise: number
+          mrpPaise: number
+          totalAvailable: number
+          minOrderQuantity: number
+          latestExpiry: Date
+        }>
+      >(
+        `
       SELECT o."medicineId", o."distributorId", o.name, o.brand, o.composition, o.form,
              o."bestPricePaise", o."mrpPaise", o."totalAvailable", o."minOrderQuantity",
              o."latestExpiry"
@@ -215,11 +228,12 @@ export class SearchService {
       ORDER BY ${outerOrder}
       LIMIT $3
       `,
-      distributorIds,
-      SearchService.PER_DISTRIBUTOR_FANOUT,
-      SearchService.MERGE_LIMIT,
-      ...(query ? [query] : []),
-      ...(input.form ? [input.form] : []),
+        distributorIds,
+        SearchService.PER_DISTRIBUTOR_FANOUT,
+        SearchService.MERGE_LIMIT,
+        ...(query ? [query] : []),
+        ...(input.form ? [input.form] : []),
+      ),
     )
 
     // Collapse to one entry per medicine, keeping every seller so the retailer

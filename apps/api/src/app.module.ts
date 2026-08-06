@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common'
+import { type MiddlewareConsumer, Module, type NestModule } from '@nestjs/common'
 import { ConfigModule } from '@nestjs/config'
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler'
 import { APP_GUARD } from '@nestjs/core'
@@ -12,6 +12,7 @@ import { RedisModule } from './common/redis/redis.module'
 import { HealthModule } from './health/health.module'
 import { SearchModule } from './search/search.module'
 import { TenancyModule } from './tenancy/tenancy.module'
+import { TenantMiddleware } from './tenancy/tenant.middleware'
 import { loadEnv } from './config/env'
 
 const env = loadEnv()
@@ -61,4 +62,13 @@ const env = loadEnv()
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  /**
+   * Every route, without exception. A route that runs outside a tenant context
+   * would query as the owner connection and bypass RLS entirely, so there is
+   * no opt-out here by design.
+   */
+  configure(consumer: MiddlewareConsumer): void {
+    consumer.apply(TenantMiddleware).forRoutes('*path')
+  }
+}

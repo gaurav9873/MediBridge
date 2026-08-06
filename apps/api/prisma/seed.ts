@@ -1,6 +1,7 @@
 import { PrismaPg } from '@prisma/adapter-pg'
 import argon2 from 'argon2'
 import { PrismaClient } from '../src/generated/prisma/client'
+import { SYSTEM_ROLE_LABELS, SYSTEM_ROLE_PERMISSIONS } from '@medibridge/types'
 import { requireDatabaseUrl } from './load-env'
 import { seedMedicines } from './seed/medicines'
 
@@ -71,10 +72,11 @@ async function seedCompany(): Promise<void> {
     },
   })
   COMPANY_ID = company.id
+  const company_ = company
 
   // A second tenant in the other mode, so both paths have real data to
   // exercise and cross-tenant isolation can actually be tested.
-  await prisma.company.create({
+  const second = await prisma.company.create({
     data: {
       name: 'HealthPlus Distributors',
       slug: 'healthplus',
@@ -86,6 +88,26 @@ async function seedCompany(): Promise<void> {
       brandColor: '#7c3aed',
     },
   })
+
+  // Every company gets the same seven fixed roles, as bundles of permission
+  // keys. Custom roles later are rows in the same table with isSystem = false,
+  // so nothing here or in the guards changes.
+  for (const company of [company_, second]) {
+    for (const [key, permissions] of Object.entries(SYSTEM_ROLE_PERMISSIONS)) {
+      const role = await prisma.role.create({
+        data: {
+          companyId: company.id,
+          key,
+          name: SYSTEM_ROLE_LABELS[key as keyof typeof SYSTEM_ROLE_LABELS],
+          isSystem: true,
+        },
+      })
+      await prisma.rolePermission.createMany({
+        data: permissions.map((permission) => ({ roleId: role.id, permission })),
+      })
+    }
+  }
+  console.log(`  ${Object.keys(SYSTEM_ROLE_PERMISSIONS).length} system roles seeded per company`)
 
   console.log('  MediBridge          MARKETPLACE, 20% token')
   console.log('  HealthPlus          PRIVATE_DISTRIBUTOR, 15-day credit')
@@ -208,6 +230,27 @@ async function createUserWithAddress(params: {
       emailVerifiedAt: now,
     },
   })
+
+  // The password lives on an identity row; User.passwordHash is legacy.
+  await prisma.userIdentity.create({
+    data: {
+      userId: user.id,
+      method: 'PASSWORD',
+      identifier: params.phone,
+      secretHash: passwordHash,
+      isVerified: true,
+    },
+  })
+
+  // Company Admin by default, so seeded staff can actually do something.
+  const adminRole = await prisma.role.findFirst({
+    where: { companyId: COMPANY_ID, key: 'COMPANY_ADMIN' },
+  })
+  if (adminRole) {
+    await prisma.userRoleAssignment.create({
+      data: { userId: user.id, roleId: adminRole.id },
+    })
+  }
 
   if (!params.address) return { userId: user.id }
 
