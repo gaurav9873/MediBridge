@@ -2,7 +2,7 @@ import { type CanActivate, type ExecutionContext, Injectable, SetMetadata } from
 import { Reflector } from '@nestjs/core'
 import { ApiErrorCode, type Permission } from '@medibridge/types'
 import { AppException } from '../common/errors/app-exception'
-import { PrismaService } from '../common/prisma/prisma.service'
+import { TenantPrismaService } from '../tenancy/tenant-prisma.service'
 import type { AuthenticatedRequest } from './auth.guard'
 
 export const PERMISSIONS_KEY = 'requiredPermissions'
@@ -22,7 +22,7 @@ export const RequirePermission = (...permissions: Permission[]): MethodDecorator
 export class PermissionGuard implements CanActivate {
   constructor(
     private readonly reflector: Reflector,
-    private readonly prisma: PrismaService,
+    private readonly db: TenantPrismaService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -45,10 +45,14 @@ export class PermissionGuard implements CanActivate {
 
   /** Every permission across every role the user holds. */
   private async permissionsFor(userId: string): Promise<Set<string>> {
-    const assignments = await this.prisma.userRoleAssignment.findMany({
-      where: { userId },
-      include: { role: { include: { permissions: true } } },
-    })
+    // Joins roles, which is tenant-scoped. Permissions are resolved before the
+    // request's own tenant work begins, so this reads outside that scope.
+    const assignments = await this.db.runPreTenant((tx) =>
+      tx.userRoleAssignment.findMany({
+        where: { userId },
+        include: { role: { include: { permissions: true } } },
+      }),
+    )
 
     const granted = new Set<string>()
     for (const assignment of assignments) {

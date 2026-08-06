@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common'
 import { ApiErrorCode, type SessionUser, type SignInInput, UserRole } from '@medibridge/types'
 import { AuthMethod } from '@medibridge/types'
 import { AppException } from '../common/errors/app-exception'
-import { PrismaService } from '../common/prisma/prisma.service'
+import { TenantPrismaService } from '../tenancy/tenant-prisma.service'
 import { AuthProviderRegistry } from './providers/auth-provider.registry'
 import { TokenService } from './token.service'
 
@@ -11,7 +11,7 @@ export class AuthService {
   private readonly logger = new Logger(AuthService.name)
 
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly db: TenantPrismaService,
     private readonly tokens: TokenService,
     private readonly providers: AuthProviderRegistry,
   ) {}
@@ -53,10 +53,12 @@ export class AuthService {
       context.companyId ?? null,
     )
 
-    const user = await this.prisma.user.findFirst({
-      where: { id: identity.userId, deletedAt: null },
-      include: { customerProfile: true, companyRef: true },
-    })
+    const user = await this.db.runPreTenant((tx) =>
+      tx.user.findFirst({
+        where: { id: identity.userId, deletedAt: null },
+        include: { customerProfile: true, companyRef: true },
+      }),
+    )
     if (!user) throw new AppException(ApiErrorCode.INVALID_CREDENTIALS)
 
     if (user.accountStatus === 'SUSPENDED') {
@@ -83,10 +85,9 @@ export class AuthService {
     const accessToken = this.tokens.signAccessToken({ sub: user.id, role: user.role, tv: 0 })
     const refreshToken = await this.tokens.issueRefreshToken(user.id, context)
 
-    await this.prisma.user.update({
-      where: { id: user.id },
-      data: { lastLoginAt: new Date() },
-    })
+    await this.db.runPreTenant((tx) =>
+      tx.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } }),
+    )
 
     return { user: this.toSessionUser(user), accessToken, refreshToken }
   }
@@ -115,10 +116,12 @@ export class AuthService {
   }
 
   async findSessionUser(userId: string): Promise<SessionUser | null> {
-    const user = await this.prisma.user.findFirst({
-      where: { id: userId, deletedAt: null },
-      include: { customerProfile: true, companyRef: true },
-    })
+    const user = await this.db.runPreTenant((tx) =>
+      tx.user.findFirst({
+        where: { id: userId, deletedAt: null },
+        include: { customerProfile: true, companyRef: true },
+      }),
+    )
     if (!user) return null
     if (user.accountStatus === 'SUSPENDED') return null
     return this.toSessionUser(user)

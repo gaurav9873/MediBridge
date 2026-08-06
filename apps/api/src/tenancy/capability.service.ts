@@ -10,7 +10,7 @@ import {
   type PaymentTermType,
 } from '@medibridge/types'
 import { AppException } from '../common/errors/app-exception'
-import { PrismaService } from '../common/prisma/prisma.service'
+import { TenantPrismaService } from './tenant-prisma.service'
 import { RedisService } from '../common/redis/redis.service'
 
 /**
@@ -38,7 +38,7 @@ export class CapabilityService {
   private static readonly CACHE_TTL_SECONDS = 300
 
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly db: TenantPrismaService,
     private readonly redis: RedisService,
   ) {}
 
@@ -59,13 +59,15 @@ export class CapabilityService {
       }
     }
 
-    const company = await this.prisma.company.findUnique({
-      where: { id: companyId },
-      include: {
-        plan: { include: { features: true } },
-        overrides: true,
-      },
-    })
+    const company = await this.db.runPreTenant((tx) =>
+      tx.company.findUnique({
+        where: { id: companyId },
+        include: {
+          plan: { include: { features: true } },
+          overrides: true,
+        },
+      }),
+    )
     if (!company) throw new AppException(ApiErrorCode.NOT_FOUND)
 
     const mode = company.businessMode as BusinessMode
@@ -139,19 +141,23 @@ export class CapabilityService {
    * routinely gives one large buyer credit while everyone else pays a token.
    */
   async paymentTerms(companyId: string, customerId?: string): Promise<PaymentTerms> {
-    const company = await this.prisma.company.findUnique({
-      where: { id: companyId },
-      select: { paymentTermType: true, tokenPercent: true, creditDays: true },
-    })
+    const company = await this.db.runPreTenant((tx) =>
+      tx.company.findUnique({
+        where: { id: companyId },
+        select: { paymentTermType: true, tokenPercent: true, creditDays: true },
+      }),
+    )
     if (!company) throw new AppException(ApiErrorCode.NOT_FOUND)
 
     let type = company.paymentTermType as PaymentTermType
 
     if (customerId) {
-      const customer = await this.prisma.customer.findUnique({
-        where: { id: customerId },
-        select: { paymentTermType: true },
-      })
+      const customer = await this.db.runPreTenant((tx) =>
+        tx.customer.findUnique({
+          where: { id: customerId },
+          select: { paymentTermType: true },
+        }),
+      )
       if (customer?.paymentTermType) type = customer.paymentTermType as PaymentTermType
     }
 

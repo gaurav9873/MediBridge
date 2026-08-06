@@ -4,7 +4,7 @@ import { type TenantBranding } from '@medibridge/types'
 import type { Request } from 'express'
 import { Public } from '../auth/auth.guard'
 import { AuthProviderRegistry } from '../auth/providers/auth-provider.registry'
-import { PrismaService } from '../common/prisma/prisma.service'
+import { TenantPrismaService } from './tenant-prisma.service'
 import { TenantResolverService } from './tenant-resolver.service'
 
 /**
@@ -20,7 +20,7 @@ import { TenantResolverService } from './tenant-resolver.service'
 export class TenantController {
   constructor(
     private readonly resolver: TenantResolverService,
-    private readonly prisma: PrismaService,
+    private readonly db: TenantPrismaService,
     private readonly providers: AuthProviderRegistry,
   ) {}
 
@@ -35,20 +35,22 @@ export class TenantController {
     })
     if (!resolved) return null
 
-    const company = await this.prisma.company.findUnique({
-      where: { id: resolved.companyId },
-      select: {
-        id: true,
-        slug: true,
-        name: true,
-        logoUrl: true,
-        brandColor: true,
-        loginImageUrl: true,
-        supportEmail: true,
-        supportPhone: true,
-        businessMode: true,
-      },
-    })
+    const company = await this.db.runPreTenant((tx) =>
+      tx.company.findUnique({
+        where: { id: resolved.companyId },
+        select: {
+          id: true,
+          slug: true,
+          name: true,
+          logoUrl: true,
+          brandColor: true,
+          loginImageUrl: true,
+          supportEmail: true,
+          supportPhone: true,
+          businessMode: true,
+        },
+      }),
+    )
     if (!company) return null
 
     return {

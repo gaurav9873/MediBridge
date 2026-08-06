@@ -45,6 +45,44 @@ export class TenantPrismaService implements OnModuleInit {
    * two tables. Now the database is asked directly, at boot, every boot.
    */
   async onModuleInit(): Promise<void> {
+    await this.assertRlsApplies()
+    await this.assertEveryTenantTableHasAPolicy()
+  }
+
+  /**
+   * Refuse to run as a role that Postgres exempts from Row-Level Security.
+   *
+   * Policies on every table counted for nothing while the API connected as a
+   * SUPERUSER with BYPASSRLS: correct policies, never applied, and a
+   * cross-tenant read returned everything. Coverage and enforcement are
+   * different questions, so they get different checks.
+   */
+  private async assertRlsApplies(): Promise<void> {
+    const [role] = await this.prisma.$queryRaw<
+      Array<{ rolname: string; rolsuper: boolean; rolbypassrls: boolean }>
+    >`
+      SELECT rolname, rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user
+    `
+
+    if (!role) {
+      this.logger.warn('Could not identify the database role — skipping the RLS bypass check')
+      return
+    }
+
+    if (role.rolsuper || role.rolbypassrls) {
+      this.logger.error(
+        `Database role "${role.rolname}" bypasses Row-Level Security ` +
+          `(superuser=${role.rolsuper}, bypassrls=${role.rolbypassrls}). ` +
+          'Every tenant policy would be inert. Point APP_DATABASE_URL at a ' +
+          'role with NOSUPERUSER and NOBYPASSRLS.',
+      )
+      throw new Error(`Refusing to start: role "${role.rolname}" bypasses Row-Level Security`)
+    }
+
+    this.logger.log(`Row-Level Security applies to this connection (role: ${role.rolname})`)
+  }
+
+  private async assertEveryTenantTableHasAPolicy(): Promise<void> {
     try {
       const unprotected = await this.prisma.$queryRaw<Array<{ table_name: string }>>`
         SELECT * FROM unprotected_tenant_tables()
@@ -85,6 +123,29 @@ export class TenantPrismaService implements OnModuleInit {
    */
   async runAsPlatform<T>(reason: string, fn: (tx: TenantTx) => Promise<T>): Promise<T> {
     this.logger.log(`Platform-wide query: ${reason}`)
+    return this.withTenant(null, true, fn)
+  }
+
+  /**
+   * Lookups from before a tenant is known.
+   *
+   * Three things happen before there is a tenant to scope by, and each of them
+   * is how the tenant gets decided in the first place:
+   *
+   *   - resolving a host, domain or slug to a company
+   *   - fetching that company's branding for the login page
+   *   - identifying a user, since the tenant is derived FROM the user
+   *
+   * Scoping these by tenant would be circular, so they are unscoped for that
+   * reason and no other. That is why this is a separate, narrowly named method
+   * rather than a second use of runAsPlatform — and why the checks that follow
+   * matter: AuthService refuses a session whose company does not match the
+   * portal it arrived on.
+   *
+   * Unlogged, unlike runAsPlatform, because it runs on every request rather
+   * than on a deliberate administrative action.
+   */
+  async runPreTenant<T>(fn: (tx: TenantTx) => Promise<T>): Promise<T> {
     return this.withTenant(null, true, fn)
   }
 

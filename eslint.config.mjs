@@ -87,10 +87,16 @@ export default tseslint.config(
     files: ['apps/api/src/**/*.ts'],
     ignores: [
       'apps/api/src/common/prisma/**',
-      'apps/api/src/tenancy/**',
-      // Auth resolves the session before a tenant context can exist, and
-      // health checks must work without one. Both are infrastructure.
-      'apps/api/src/auth/**',
+      // TenantPrismaService wraps the raw client; it is the one file that must
+      // hold it. The rest of tenancy/ goes through runPreTenant like everyone
+      // else, so the blanket exception it used to have is gone.
+      'apps/api/src/tenancy/tenant-prisma.service.ts',
+      // The two auth tables without a companyId — identities and refresh
+      // tokens — carry no tenant to scope by. Everything else in auth/ that
+      // touches a tenant table now uses runPreTenant.
+      'apps/api/src/auth/token.service.ts',
+      'apps/api/src/auth/providers/password.provider.ts',
+      // Health checks must answer before, and independently of, any tenant.
       'apps/api/src/health/**',
       'apps/api/src/generated/**',
     ],

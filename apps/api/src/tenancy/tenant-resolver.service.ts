@@ -5,7 +5,7 @@ import {
   type TenantResolutionRequest,
   type TenantResolutionStrategyContract,
 } from '@medibridge/types'
-import { PrismaService } from '../common/prisma/prisma.service'
+import { TenantPrismaService } from './tenant-prisma.service'
 import { RedisService } from '../common/redis/redis.service'
 import { loadEnv } from '../config/env'
 
@@ -26,7 +26,7 @@ export class TenantResolverService {
   private static readonly CACHE_TTL_SECONDS = 300
 
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly db: TenantPrismaService,
     private readonly redis: RedisService,
   ) {
     const env = loadEnv()
@@ -68,12 +68,14 @@ export class TenantResolverService {
           ? { customDomain: value.toLowerCase() }
           : { id: value }
 
-    const company = await this.prisma.company.findFirst({
-      // A suspended tenant resolves to nothing, so its portal stops serving
-      // rather than serving a broken half-session.
-      where: { ...where, deletedAt: null, status: { in: ['TRIAL', 'ACTIVE'] } },
-      select: { id: true, slug: true },
-    })
+    const company = await this.db.runPreTenant((tx) =>
+      tx.company.findFirst({
+        // A suspended tenant resolves to nothing, so its portal stops serving
+        // rather than serving a broken half-session.
+        where: { ...where, deletedAt: null, status: { in: ['TRIAL', 'ACTIVE'] } },
+        select: { id: true, slug: true },
+      }),
+    )
     if (!company) return null
 
     const value_ = { companyId: company.id, slug: company.slug }

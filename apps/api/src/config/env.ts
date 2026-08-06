@@ -11,6 +11,14 @@ const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
 
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
+  /**
+   * The role the running API connects as. Deliberately separate from
+   * DATABASE_URL: that one owns the schema and can bypass Row-Level Security,
+   * which would silently disable every tenant policy. Falls back so a
+   * misconfigured environment fails at the boot check with a clear message
+   * rather than at a config parse with an opaque one.
+   */
+  APP_DATABASE_URL: z.string().min(1).optional(),
   REDIS_URL: z.string().min(1, 'REDIS_URL is required'),
 
   API_PORT: z.coerce.number().int().min(1).max(65535).default(4000),

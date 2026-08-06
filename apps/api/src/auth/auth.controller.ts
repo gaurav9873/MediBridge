@@ -20,6 +20,7 @@ import {
   Public,
   REFRESH_COOKIE,
 } from './auth.guard'
+import { TenantContextService } from '../tenancy/tenant-context'
 import { TokenService } from './token.service'
 
 @ApiTags('Auth')
@@ -30,6 +31,7 @@ export class AuthController {
   constructor(
     private readonly auth: AuthService,
     private readonly tokens: TokenService,
+    private readonly tenant: TenantContextService,
   ) {}
 
   /**
@@ -73,6 +75,9 @@ export class AuthController {
     const { user, accessToken, refreshToken } = await this.auth.signIn(body, {
       userAgent: req.get('user-agent'),
       ipAddress: req.ip,
+      // Which portal this arrived on. AuthService refuses a credential that
+      // belongs to a different company; omitting it silently disabled that.
+      companyId: this.tenant.companyId(),
     })
     this.setSessionCookies(res, accessToken, refreshToken)
     return { user }
@@ -98,6 +103,7 @@ export class AuthController {
       userAgent: req.get('user-agent'),
       ipAddress: req.ip,
       requiredRole: UserRole.ADMIN,
+      companyId: this.tenant.companyId(),
     })
     this.setSessionCookies(res, accessToken, refreshToken)
     return { user }

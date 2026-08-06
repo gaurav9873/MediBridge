@@ -15,7 +15,9 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
   constructor() {
     const env = loadEnv()
     super({
-      adapter: new PrismaPg({ connectionString: env.DATABASE_URL }),
+      // The application role, never the owner. See APP_DATABASE_URL in env.ts;
+      // TenantPrismaService refuses to start if this role can bypass RLS.
+      adapter: new PrismaPg({ connectionString: env.APP_DATABASE_URL ?? env.DATABASE_URL }),
       log:
         env.NODE_ENV === 'development'
           ? [

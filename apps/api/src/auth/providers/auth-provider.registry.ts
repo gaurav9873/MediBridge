@@ -7,7 +7,7 @@ import {
   type IdentityResult,
 } from '@medibridge/types'
 import { AppException } from '../../common/errors/app-exception'
-import { PrismaService } from '../../common/prisma/prisma.service'
+import { TenantPrismaService } from '../../tenancy/tenant-prisma.service'
 import { PasswordProvider } from './password.provider'
 
 /**
@@ -29,7 +29,7 @@ export class AuthProviderRegistry {
   private readonly providers = new Map<AuthMethod, AuthProviderContract>()
 
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly db: TenantPrismaService,
     password: PasswordProvider,
   ) {
     this.register(password)
@@ -49,10 +49,13 @@ export class AuthProviderRegistry {
     const built = new Set(this.available())
     if (!companyId) return [...built]
 
-    const configured = await this.prisma.companyAuthMethod.findMany({
-      where: { companyId, isEnabled: true },
-      select: { method: true },
-    })
+    // Which methods a portal offers is asked before anyone has signed in.
+    const configured = await this.db.runPreTenant((tx) =>
+      tx.companyAuthMethod.findMany({
+        where: { companyId, isEnabled: true },
+        select: { method: true },
+      }),
+    )
     const offered = configured.map((row) => row.method as AuthMethod).filter((m) => built.has(m))
     // A tenant with nothing configured falls back to whatever is built, rather
     // than locking everyone out.
