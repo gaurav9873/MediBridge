@@ -12,7 +12,6 @@ import {
 } from '@medibridge/types'
 import { z } from 'zod'
 import { AppException } from '../../common/errors/app-exception'
-import { PrismaService } from '../../common/prisma/prisma.service'
 import type { BulkHandler, BulkScope, ParsedRow, PrismaTx } from './bulk-handler'
 
 const columns: ColumnSpec[] = [
@@ -156,8 +155,6 @@ export class InventoryStockUpdateHandler implements BulkHandler<StockRow> {
   readonly templateSheetName = 'Stock Update'
   readonly rowSchema = rowSchema
 
-  constructor(private readonly prisma: PrismaService) {}
-
   naturalKey(row: StockRow): string {
     return [row.medicineName, row.brand, row.batchNumber]
       .map((part) => part.trim().toLowerCase())
@@ -169,9 +166,13 @@ export class InventoryStockUpdateHandler implements BulkHandler<StockRow> {
     return { userId: user.id, role: user.role }
   }
 
-  async validateBatch(rows: ParsedRow<StockRow>[], scope: BulkScope): Promise<RowIssue[]> {
+  async validateBatch(
+    rows: ParsedRow<StockRow>[],
+    scope: BulkScope,
+    tx: PrismaTx,
+  ): Promise<RowIssue[]> {
     const issues: RowIssue[] = []
-    const matches = await this.findMatches(rows, scope)
+    const matches = await this.findMatches(rows, scope, tx)
 
     for (const row of rows) {
       const key = this.naturalKey(row.data)
@@ -229,8 +230,12 @@ export class InventoryStockUpdateHandler implements BulkHandler<StockRow> {
     return issues
   }
 
-  async classifyBatch(rows: ParsedRow<StockRow>[], scope: BulkScope): Promise<RowPlan[]> {
-    const matches = await this.findMatches(rows, scope)
+  async classifyBatch(
+    rows: ParsedRow<StockRow>[],
+    scope: BulkScope,
+    tx: PrismaTx,
+  ): Promise<RowPlan[]> {
+    const matches = await this.findMatches(rows, scope, tx)
 
     return rows.map((row) => {
       const match = matches.get(this.naturalKey(row.data))
@@ -275,7 +280,7 @@ export class InventoryStockUpdateHandler implements BulkHandler<StockRow> {
     scope: BulkScope,
     tx: PrismaTx,
   ): Promise<BatchResult> {
-    const matches = await this.findMatches(rows, scope)
+    const matches = await this.findMatches(rows, scope, tx)
     let updated = 0
     let skipped = 0
     const issues: RowIssue[] = []
@@ -316,6 +321,7 @@ export class InventoryStockUpdateHandler implements BulkHandler<StockRow> {
   private async findMatches(
     rows: ParsedRow<StockRow>[],
     scope: BulkScope,
+    tx: PrismaTx,
   ): Promise<
     Map<
       string,
@@ -333,7 +339,7 @@ export class InventoryStockUpdateHandler implements BulkHandler<StockRow> {
 
     const batchNumbers = [...new Set(rows.map((row) => row.data.batchNumber))]
 
-    const items = await this.prisma.inventoryItem.findMany({
+    const items = await tx.inventoryItem.findMany({
       // scope.distributorId comes from the session, so a distributorId column
       // in the uploaded file can never widen this.
       where: {

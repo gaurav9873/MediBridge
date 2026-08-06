@@ -15,7 +15,7 @@ import {
   TERMINAL_BULK_STATUSES,
 } from '@medibridge/types'
 import { AppException } from '../common/errors/app-exception'
-import { PrismaService } from '../common/prisma/prisma.service'
+import { TenantPrismaService } from '../tenancy/tenant-prisma.service'
 import { BulkQueue } from './bulk.queue'
 import { BulkHandlerRegistry } from './handlers/registry'
 import { ReportWriter } from './parsing/report-writer'
@@ -26,7 +26,7 @@ export class BulkService {
   private readonly logger = new Logger(BulkService.name)
 
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly db: TenantPrismaService,
     private readonly registry: BulkHandlerRegistry,
     private readonly storage: FileStorage,
     private readonly reports: ReportWriter,
@@ -66,7 +66,7 @@ export class BulkService {
     }
 
     // One active import per user: two runs of the same sheet would race.
-    const active = await this.prisma.bulkJob.count({
+    const active = await this.db.raw.bulkJob.count({
       where: { createdById: user.id, status: { in: [...ACTIVE_BULK_STATUSES] } },
     })
     if (active >= BULK_LIMITS.maxConcurrentPerUser) {
@@ -82,22 +82,24 @@ export class BulkService {
 
     const distributorId = await this.resolveDistributorScope(user, scope.role)
 
-    const job = await this.prisma.bulkJob.create({
-      data: {
-        type,
-        status: BulkJobStatus.PENDING,
-        createdById: user.id,
-        // Taken from the signed-in user's company, never from the request.
-        // Non-null because an import always belongs to exactly one tenant;
-        // the platform owner imports into the global catalogue explicitly.
-        companyId: requireCompany(user),
-        scopeId: distributorId ?? null,
-        fileKey: 'pending',
-        fileName: file.originalname.slice(0, 255),
-        sizeBytes: file.size,
-        options: { dryRun: options.dryRun },
-      },
-    })
+    const job = await this.db.run((tx) =>
+      tx.bulkJob.create({
+        data: {
+          type,
+          status: BulkJobStatus.PENDING,
+          createdById: user.id,
+          // Taken from the signed-in user's company, never from the request.
+          // Non-null because an import always belongs to exactly one tenant;
+          // the platform owner imports into the global catalogue explicitly.
+          companyId: requireCompany(user),
+          scopeId: distributorId ?? null,
+          fileKey: 'pending',
+          fileName: file.originalname.slice(0, 255),
+          sizeBytes: file.size,
+          options: { dryRun: options.dryRun },
+        },
+      }),
+    )
 
     // The key is derived from the job id, never from the uploaded file name.
     const fileKey = this.storage.buildKey({
@@ -106,7 +108,7 @@ export class BulkService {
       name: `source${extensionOf(file.originalname)}`,
     })
     await this.storage.write(fileKey, file.buffer)
-    await this.prisma.bulkJob.update({ where: { id: job.id }, data: { fileKey } })
+    await this.db.raw.bulkJob.update({ where: { id: job.id }, data: { fileKey } })
 
     await this.queue.enqueue({ jobId: job.id, pass: 'validate' })
 
@@ -114,7 +116,7 @@ export class BulkService {
   }
 
   async getJob(jobId: string, user: SessionUser): Promise<BulkJobSummary> {
-    const job = await this.prisma.bulkJob.findUnique({
+    const job = await this.db.raw.bulkJob.findUnique({
       where: { id: jobId },
       include: { createdBy: { select: { fullName: true } } },
     })
@@ -127,7 +129,7 @@ export class BulkService {
   async getPreview(jobId: string, user: SessionUser): Promise<BulkJobPreview> {
     const summary = await this.getJob(jobId, user)
 
-    const issues = await this.prisma.bulkJobError.findMany({
+    const issues = await this.db.raw.bulkJobError.findMany({
       where: { jobId },
       orderBy: { rowNumber: 'asc' },
       take: BULK_LIMITS.previewSampleSize,
@@ -165,7 +167,7 @@ export class BulkService {
       })
     }
 
-    await this.prisma.bulkJob.update({
+    await this.db.raw.bulkJob.update({
       where: { id: jobId },
       data: { confirmedAt: new Date(), processedRows: 0 },
     })
@@ -183,7 +185,7 @@ export class BulkService {
     if (!ACTIVE_BULK_STATUSES.includes(job.status as never)) {
       throw new AppException(ApiErrorCode.INVALID_STATUS_TRANSITION)
     }
-    await this.prisma.bulkJob.update({
+    await this.db.raw.bulkJob.update({
       where: { id: jobId },
       data: { status: BulkJobStatus.PAUSED },
     })
@@ -205,7 +207,7 @@ export class BulkService {
     if (TERMINAL_BULK_STATUSES.includes(job.status as never)) {
       throw new AppException(ApiErrorCode.INVALID_STATUS_TRANSITION)
     }
-    await this.prisma.bulkJob.update({
+    await this.db.raw.bulkJob.update({
       where: { id: jobId },
       data: { status: BulkJobStatus.CANCELLED, finishedAt: new Date() },
     })
@@ -221,14 +223,14 @@ export class BulkService {
     }
 
     const [items, total] = await Promise.all([
-      this.prisma.bulkJob.findMany({
+      this.db.raw.bulkJob.findMany({
         where,
         include: { createdBy: { select: { fullName: true } } },
         orderBy: { queuedAt: 'desc' },
         skip: (query.page - 1) * query.pageSize,
         take: query.pageSize,
       }),
-      this.prisma.bulkJob.count({ where }),
+      this.db.raw.bulkJob.count({ where }),
     ])
 
     return {
@@ -258,7 +260,7 @@ export class BulkService {
   // -------------------------------------------------------------------------
 
   private async requireJob(jobId: string, user: SessionUser) {
-    const job = await this.prisma.bulkJob.findUnique({ where: { id: jobId } })
+    const job = await this.db.raw.bulkJob.findUnique({ where: { id: jobId } })
     if (!job) throw new AppException(ApiErrorCode.NOT_FOUND)
     this.assertOwnership(job, user)
     return job
@@ -276,7 +278,7 @@ export class BulkService {
     role: string,
   ): Promise<string | undefined> {
     if (role !== 'DISTRIBUTOR') return undefined
-    const profile = await this.prisma.distributorProfile.findUnique({
+    const profile = await this.db.raw.distributorProfile.findUnique({
       where: { userId: user.id },
       select: { id: true },
     })

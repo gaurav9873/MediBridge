@@ -2,7 +2,7 @@ import { Controller, Get } from '@nestjs/common'
 import { ApiOperation, ApiTags } from '@nestjs/swagger'
 import { UserRole } from '@medibridge/types'
 import { Roles } from '../auth/auth.guard'
-import { PrismaService } from '../common/prisma/prisma.service'
+import { TenantPrismaService } from '../tenancy/tenant-prisma.service'
 
 export interface AdminOverview {
   pendingApprovals: number
@@ -19,7 +19,7 @@ export interface AdminOverview {
 @Roles(UserRole.ADMIN)
 @Controller('admin')
 export class AdminController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly db: TenantPrismaService) {}
 
   /**
    * Numbers for the admin home screen.
@@ -35,43 +35,47 @@ export class AdminController {
 
     const in90Days = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000)
 
-    const [
-      pendingApprovals,
-      activeRetailers,
-      activeDistributors,
-      medicines,
-      inventoryBatches,
-      expiringSoon,
-      ordersToday,
-      openProblems,
-    ] = await Promise.all([
-      this.prisma.user.count({
-        where: { accountStatus: 'PENDING_VERIFICATION', deletedAt: null },
-      }),
-      this.prisma.user.count({
-        where: { role: 'RETAILER', accountStatus: 'ACTIVE', deletedAt: null },
-      }),
-      this.prisma.user.count({
-        where: { role: 'DISTRIBUTOR', accountStatus: 'ACTIVE', deletedAt: null },
-      }),
-      this.prisma.medicine.count({ where: { isActive: true } }),
-      this.prisma.inventoryItem.count({ where: { isActive: true, deletedAt: null } }),
-      this.prisma.inventoryItem.count({
-        where: { isActive: true, deletedAt: null, expiryDate: { lte: in90Days } },
-      }),
-      this.prisma.order.count({ where: { createdAt: { gte: startOfToday } } }),
-      this.prisma.problemReport.count({ where: { status: { in: ['OPEN', 'IN_PROGRESS'] } } }),
-    ])
+    // Platform-wide by design: these counts span every tenant. runAsPlatform
+    // makes that a deliberate, logged decision rather than a silent bypass.
+    return this.db.runAsPlatform('admin dashboard counts', async (tx) => {
+      const [
+        pendingApprovals,
+        activeRetailers,
+        activeDistributors,
+        medicines,
+        inventoryBatches,
+        expiringSoon,
+        ordersToday,
+        openProblems,
+      ] = await Promise.all([
+        tx.user.count({
+          where: { accountStatus: 'PENDING_VERIFICATION', deletedAt: null },
+        }),
+        tx.user.count({
+          where: { role: 'RETAILER', accountStatus: 'ACTIVE', deletedAt: null },
+        }),
+        tx.user.count({
+          where: { role: 'DISTRIBUTOR', accountStatus: 'ACTIVE', deletedAt: null },
+        }),
+        tx.medicine.count({ where: { isActive: true } }),
+        tx.inventoryItem.count({ where: { isActive: true, deletedAt: null } }),
+        tx.inventoryItem.count({
+          where: { isActive: true, deletedAt: null, expiryDate: { lte: in90Days } },
+        }),
+        tx.order.count({ where: { createdAt: { gte: startOfToday } } }),
+        tx.problemReport.count({ where: { status: { in: ['OPEN', 'IN_PROGRESS'] } } }),
+      ])
 
-    return {
-      pendingApprovals,
-      activeRetailers,
-      activeDistributors,
-      medicines,
-      inventoryBatches,
-      expiringSoon,
-      ordersToday,
-      openProblems,
-    }
+      return {
+        pendingApprovals,
+        activeRetailers,
+        activeDistributors,
+        medicines,
+        inventoryBatches,
+        expiringSoon,
+        ordersToday,
+        openProblems,
+      }
+    })
   }
 }

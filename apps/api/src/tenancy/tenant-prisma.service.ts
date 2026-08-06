@@ -28,6 +28,17 @@ export class TenantPrismaService implements OnModuleInit {
   ) {}
 
   /**
+   * The unscoped client, for infrastructure reads only.
+   *
+   * Job bookkeeping — status polling, progress counters — is keyed by primary
+   * key and belongs to the engine, not to a tenant. Business data must never
+   * come through here; that is what run() and runAs() are for.
+   */
+  get raw(): PrismaService {
+    return this.prisma
+  }
+
+  /**
    * A startup check that every tenant table is actually protected.
    *
    * Coverage was derived by pattern-matching generated SQL once, and it missed

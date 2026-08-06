@@ -3,7 +3,7 @@ import { ApiOperation, ApiTags } from '@nestjs/swagger'
 import { type Paginated, UserRole } from '@medibridge/types'
 import { z } from 'zod'
 import { Roles } from '../auth/auth.guard'
-import { PrismaService } from '../common/prisma/prisma.service'
+import { TenantPrismaService } from '../tenancy/tenant-prisma.service'
 
 /**
  * Read-only lists behind the admin menu.
@@ -74,7 +74,7 @@ export interface AdminSettingRow {
 @Roles(UserRole.ADMIN)
 @Controller('admin')
 export class AdminListsController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly db: TenantPrismaService) {}
 
   @Get('medicines')
   @ApiOperation({ summary: 'Browse the shared medicine catalogue' })
@@ -93,16 +93,19 @@ export class AdminListsController {
         }
       : {}
 
-    const [items, total] = await Promise.all([
-      this.prisma.medicine.findMany({
-        where,
-        orderBy: { name: 'asc' },
-        skip: (query.page - 1) * query.pageSize,
-        take: query.pageSize,
-        include: { _count: { select: { inventoryItems: true } } },
-      }),
-      this.prisma.medicine.count({ where }),
-    ])
+    // Platform-wide by design; runAsPlatform makes the bypass explicit and logged.
+    const [items, total] = await this.db.runAsPlatform('admin browse list', (tx) =>
+      Promise.all([
+        tx.medicine.findMany({
+          where,
+          orderBy: { name: 'asc' },
+          skip: (query.page - 1) * query.pageSize,
+          take: query.pageSize,
+          include: { _count: { select: { inventoryItems: true } } },
+        }),
+        tx.medicine.count({ where }),
+      ]),
+    )
 
     return {
       items: items.map((medicine) => ({
@@ -145,20 +148,23 @@ export class AdminListsController {
         : {}),
     }
 
-    const [items, total] = await Promise.all([
-      this.prisma.user.findMany({
-        where,
-        orderBy: { createdAt: 'desc' },
-        skip: (query.page - 1) * query.pageSize,
-        take: query.pageSize,
-        include: {
-          retailerProfile: true,
-          distributorProfile: true,
-          addresses: { where: { deletedAt: null }, take: 1, orderBy: { isDefault: 'desc' } },
-        },
-      }),
-      this.prisma.user.count({ where }),
-    ])
+    // Platform-wide by design; runAsPlatform makes the bypass explicit and logged.
+    const [items, total] = await this.db.runAsPlatform('admin browse list', (tx) =>
+      Promise.all([
+        tx.user.findMany({
+          where,
+          orderBy: { createdAt: 'desc' },
+          skip: (query.page - 1) * query.pageSize,
+          take: query.pageSize,
+          include: {
+            retailerProfile: true,
+            distributorProfile: true,
+            addresses: { where: { deletedAt: null }, take: 1, orderBy: { isDefault: 'desc' } },
+          },
+        }),
+        tx.user.count({ where }),
+      ]),
+    )
 
     return {
       items: items.map((user) => {
@@ -188,20 +194,23 @@ export class AdminListsController {
   async orders(@Query() rawQuery: Record<string, string>): Promise<Paginated<AdminOrderRow>> {
     const query = listQuery.parse(rawQuery)
 
-    const [items, total] = await Promise.all([
-      this.prisma.order.findMany({
-        orderBy: { createdAt: 'desc' },
-        skip: (query.page - 1) * query.pageSize,
-        take: query.pageSize,
-        include: {
-          retailer: {
-            select: { fullName: true, retailerProfile: { select: { businessName: true } } },
+    // Platform-wide by design; runAsPlatform makes the bypass explicit and logged.
+    const [items, total] = await this.db.runAsPlatform('admin browse list', (tx) =>
+      Promise.all([
+        tx.order.findMany({
+          orderBy: { createdAt: 'desc' },
+          skip: (query.page - 1) * query.pageSize,
+          take: query.pageSize,
+          include: {
+            retailer: {
+              select: { fullName: true, retailerProfile: { select: { businessName: true } } },
+            },
+            distributor: { select: { businessName: true } },
           },
-          distributor: { select: { businessName: true } },
-        },
-      }),
-      this.prisma.order.count(),
-    ])
+        }),
+        tx.order.count(),
+      ]),
+    )
 
     return {
       items: items.map((order) => ({
@@ -225,7 +234,9 @@ export class AdminListsController {
   @Get('settings')
   @ApiOperation({ summary: 'Platform rules currently in force' })
   async settings(): Promise<AdminSettingRow[]> {
-    const settings = await this.prisma.setting.findMany({ orderBy: { key: 'asc' } })
+    const settings = await this.db.runAsPlatform('platform settings', (tx) =>
+      tx.setting.findMany({ orderBy: { key: 'asc' } }),
+    )
     return settings.map((setting) => ({
       key: setting.key,
       value: setting.value,

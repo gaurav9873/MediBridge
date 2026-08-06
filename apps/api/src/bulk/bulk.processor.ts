@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common'
 import { BULK_LIMITS, BulkJobStatus, type RowIssue } from '@medibridge/types'
-import { PrismaService } from '../common/prisma/prisma.service'
+import { TenantPrismaService } from '../tenancy/tenant-prisma.service'
 import type { AnyBulkHandler, BulkScope, ParsedRow } from './handlers/bulk-handler'
 import { BulkHandlerRegistry } from './handlers/registry'
 import { batched, openRowReader } from './parsing/row-reader'
@@ -22,8 +22,13 @@ import { FileStorage } from './storage/file-storage'
 export class BulkProcessor {
   private readonly logger = new Logger(BulkProcessor.name)
 
+  /*
+   * The worker runs outside any request, so there is no ambient tenant. Every
+   * database call therefore goes through runAs(job.companyId) — the tenant is
+   * taken from the job record, which was stamped from the uploader's session.
+   */
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly db: TenantPrismaService,
     private readonly registry: BulkHandlerRegistry,
     private readonly storage: FileStorage,
     private readonly reports: ReportWriter,
@@ -41,7 +46,7 @@ export class BulkProcessor {
     const scope = await this.buildScope(job)
 
     await this.setStatus(jobId, BulkJobStatus.VALIDATING, { processedRows: 0 })
-    await this.prisma.bulkJobError.deleteMany({ where: { jobId } })
+    await this.db.raw.bulkJobError.deleteMany({ where: { jobId } })
 
     const counts = { create: 0, update: 0, skip: 0, error: 0 }
     const seenKeys = new Set<string>()
@@ -133,7 +138,9 @@ export class BulkProcessor {
         }
 
         // --- business validation, batched ---
-        const issues = await handler.validateBatch(parsed, scope)
+        const issues = await this.db.runAs(job.companyId, (tx) =>
+          handler.validateBatch(parsed, scope, tx),
+        )
         const failedRowNumbers = new Set(issues.map((issue) => issue.rowNumber))
 
         for (const issue of issues) {
@@ -151,7 +158,9 @@ export class BulkProcessor {
         // --- classify what survived ---
         const survivors = parsed.filter((row) => !failedRowNumbers.has(row.rowNumber))
         if (survivors.length > 0) {
-          const plans = await handler.classifyBatch(survivors, scope)
+          const plans = await this.db.runAs(job.companyId, (tx) =>
+            handler.classifyBatch(survivors, scope, tx),
+          )
           for (const plan of plans) {
             if (plan.action === 'CREATE') counts.create += 1
             else if (plan.action === 'UPDATE') counts.update += 1
@@ -170,7 +179,7 @@ export class BulkProcessor {
         await this.reports.writeErrorFile(errorFileKey, handler.columns, arrayToAsync(failedRows))
       }
 
-      await this.prisma.bulkJob.update({
+      await this.db.raw.bulkJob.update({
         where: { id: jobId },
         data: {
           status: BulkJobStatus.AWAITING_CONFIRMATION,
@@ -259,7 +268,9 @@ export class BulkProcessor {
          */
         const blocked = new Set<number>()
         if (parsed.length > 0) {
-          const issues = await handler.validateBatch(parsed, scope)
+          const issues = await this.db.runAs(job.companyId, (tx) =>
+            handler.validateBatch(parsed, scope, tx),
+          )
           for (const issue of issues) {
             blocked.add(issue.rowNumber)
             counts.error += 1
@@ -277,7 +288,14 @@ export class BulkProcessor {
         const applicable = parsed.filter((row) => !blocked.has(row.rowNumber))
 
         if (applicable.length > 0) {
-          const applied = await this.applyBatchSafely(handler, applicable, scope, jobId, outcomes)
+          const applied = await this.applyBatchSafely(
+            handler,
+            applicable,
+            scope,
+            job.companyId,
+            jobId,
+            outcomes,
+          )
           counts.create += applied.created
           counts.update += applied.updated
           counts.skip += applied.skipped
@@ -285,7 +303,7 @@ export class BulkProcessor {
         }
 
         processed += batch.length
-        await this.prisma.bulkJob.update({
+        await this.db.raw.bulkJob.update({
           where: { id: jobId },
           data: {
             processedRows: processed,
@@ -303,7 +321,7 @@ export class BulkProcessor {
       const finalStatus =
         counts.error > 0 ? BulkJobStatus.COMPLETED_WITH_ERRORS : BulkJobStatus.COMPLETED
 
-      await this.prisma.bulkJob.update({
+      await this.db.raw.bulkJob.update({
         where: { id: jobId },
         data: {
           status: finalStatus,
@@ -317,7 +335,7 @@ export class BulkProcessor {
         },
       })
 
-      await this.prisma.auditLog.create({
+      await this.db.raw.auditLog.create({
         data: {
           actorId: job.createdById,
           action: `BULK_${job.type}`,
@@ -358,11 +376,12 @@ export class BulkProcessor {
     handler: AnyBulkHandler,
     rows: ParsedRow<unknown>[],
     scope: BulkScope,
+    companyId: string,
     jobId: string,
     outcomes: Array<{ rowNumber: number; key: string; action: string; detail?: string }>,
   ): Promise<{ created: number; updated: number; skipped: number; issues: RowIssue[] }> {
     try {
-      const result = await this.prisma.$transaction((tx) => handler.applyBatch(rows, scope, tx))
+      const result = await this.db.runAs(companyId, (tx) => handler.applyBatch(rows, scope, tx))
 
       for (const issue of result.issues) {
         await this.recordError(jobId, issue)
@@ -388,7 +407,7 @@ export class BulkProcessor {
 
       for (const row of rows) {
         try {
-          const single = await this.prisma.$transaction((tx) =>
+          const single = await this.db.runAs(companyId, (tx) =>
             handler.applyBatch([row], scope, tx),
           )
           created += single.created
@@ -421,7 +440,7 @@ export class BulkProcessor {
   // -------------------------------------------------------------------------
 
   private async loadJob(jobId: string) {
-    return this.prisma.bulkJob.findUnique({ where: { id: jobId } })
+    return this.db.raw.bulkJob.findUnique({ where: { id: jobId } })
   }
 
   /** The scope is rebuilt from the job's owner, never from the file. */
@@ -429,7 +448,7 @@ export class BulkProcessor {
     createdById: string
     scopeId: string | null
   }): Promise<BulkScope> {
-    const user = await this.prisma.user.findUniqueOrThrow({
+    const user = await this.db.raw.user.findUniqueOrThrow({
       where: { id: job.createdById },
       select: { id: true, role: true },
     })
@@ -442,7 +461,7 @@ export class BulkProcessor {
 
   /** Checked every batch so pause and cancel take effect promptly. */
   private async shouldStop(jobId: string): Promise<boolean> {
-    const current = await this.prisma.bulkJob.findUnique({
+    const current = await this.db.raw.bulkJob.findUnique({
       where: { id: jobId },
       select: { status: true },
     })
@@ -454,18 +473,18 @@ export class BulkProcessor {
     status: BulkJobStatus,
     extra: Record<string, unknown> = {},
   ): Promise<void> {
-    await this.prisma.bulkJob.update({ where: { id: jobId }, data: { status, ...extra } })
+    await this.db.raw.bulkJob.update({ where: { id: jobId }, data: { status, ...extra } })
   }
 
   private async bumpProgress(jobId: string, rows: number): Promise<void> {
-    await this.prisma.bulkJob.update({
+    await this.db.raw.bulkJob.update({
       where: { id: jobId },
       data: { processedRows: { increment: rows } },
     })
   }
 
   private async fail(jobId: string, reason: string): Promise<void> {
-    await this.prisma.bulkJob.update({
+    await this.db.raw.bulkJob.update({
       where: { id: jobId },
       data: { status: BulkJobStatus.FAILED, failureReason: reason, finishedAt: new Date() },
     })
@@ -477,13 +496,13 @@ export class BulkProcessor {
   ): Promise<void> {
     // Inherited from the parent job so an error row can never end up in a
     // different tenant from the import that produced it.
-    const job = await this.prisma.bulkJob.findUnique({
+    const job = await this.db.raw.bulkJob.findUnique({
       where: { id: jobId },
       select: { companyId: true },
     })
     if (!job) return
 
-    await this.prisma.bulkJobError.create({
+    await this.db.raw.bulkJobError.create({
       data: {
         jobId,
         companyId: job.companyId,
@@ -508,7 +527,7 @@ export class BulkProcessor {
     counts: { create: number; update: number; error: number },
   ): Promise<void> {
     const changed = counts.create + counts.update
-    await this.prisma.notification.create({
+    await this.db.raw.notification.create({
       data: {
         userId,
         event: 'ORDER_PLACED', // placeholder until BULK_IMPORT_FINISHED is added in Phase 7

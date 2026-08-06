@@ -88,15 +88,11 @@ export default tseslint.config(
     ignores: [
       'apps/api/src/common/prisma/**',
       'apps/api/src/tenancy/**',
+      // Auth resolves the session before a tenant context can exist, and
+      // health checks must work without one. Both are infrastructure.
       'apps/api/src/auth/**',
       'apps/api/src/health/**',
-      'apps/api/src/admin/**',
       'apps/api/src/generated/**',
-      // PENDING: the bulk engine runs in the worker process, outside any
-      // request, so it needs TenantPrismaService.runAs(companyId) rather than
-      // run(). Migrating it is tracked as the next foundation task; the
-      // exception is scoped to these files so the rule protects everything else.
-      'apps/api/src/bulk/**',
     ],
     rules: {
       'no-restricted-imports': [

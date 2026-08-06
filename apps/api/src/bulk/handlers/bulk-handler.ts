@@ -7,10 +7,15 @@ import type {
   SessionUser,
 } from '@medibridge/types'
 import type { ZodType } from 'zod'
-import type { PrismaService } from '../../common/prisma/prisma.service'
+import type { TenantTx } from '../../tenancy/tenant-prisma.service'
 
-/** A Prisma transaction client, as handed to applyBatch. */
-export type PrismaTx = Parameters<Parameters<PrismaService['$transaction']>[0]>[0]
+/**
+ * The transaction handed to every handler hook.
+ *
+ * Aliased from the tenancy layer rather than derived from PrismaService, so a
+ * handler has no route to the unscoped client even through a type import.
+ */
+export type PrismaTx = TenantTx
 
 /**
  * Who is running the import, and what they may touch.
@@ -64,12 +69,15 @@ export interface BulkHandler<TRow> {
 
   /**
    * Business validation that needs the database. Called once per batch.
-   * Return one issue per problem; a row with no issues is valid.
+   *
+   * `tx` is the tenant-scoped transaction. Handlers take it rather than
+   * holding their own client, so a handler cannot query outside the tenant
+   * context even by accident.
    */
-  validateBatch(rows: ParsedRow<TRow>[], scope: BulkScope): Promise<RowIssue[]>
+  validateBatch(rows: ParsedRow<TRow>[], scope: BulkScope, tx: PrismaTx): Promise<RowIssue[]>
 
   /** What each row would do. Drives the preview and the counts. */
-  classifyBatch(rows: ParsedRow<TRow>[], scope: BulkScope): Promise<RowPlan[]>
+  classifyBatch(rows: ParsedRow<TRow>[], scope: BulkScope, tx: PrismaTx): Promise<RowPlan[]>
 
   /** Apply the batch. Runs inside a transaction the engine owns. */
   applyBatch(rows: ParsedRow<TRow>[], scope: BulkScope, tx: PrismaTx): Promise<BatchResult>
@@ -91,7 +99,8 @@ export interface BulkHandler<TRow> {
  */
 export type AnyBulkHandler = BulkHandler<unknown>
 
-/** Convenience for handlers that need the Prisma client at construction. */
-export interface BulkHandlerDeps {
-  prisma: PrismaService
-}
+/*
+ * There is deliberately no `BulkHandlerDeps` with a client on it any more.
+ * Handlers are stateless: every database call arrives as the `tx` parameter,
+ * which is already scoped to the job's tenant.
+ */

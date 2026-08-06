@@ -13,7 +13,6 @@ import {
 } from '@medibridge/types'
 import { z } from 'zod'
 import { AppException } from '../../common/errors/app-exception'
-import { PrismaService } from '../../common/prisma/prisma.service'
 import type { BulkHandler, BulkScope, ParsedRow, PrismaTx } from './bulk-handler'
 
 const FORMS = Object.values(MedicineForm)
@@ -184,8 +183,6 @@ export class MedicineImportHandler implements BulkHandler<MedicineRow> {
   readonly templateSheetName = 'Medicines'
   readonly rowSchema = rowSchema
 
-  constructor(private readonly prisma: PrismaService) {}
-
   naturalKey(row: MedicineRow): string {
     // Mirrors @@unique([name, brand, strength, packSize]) on Medicine.
     return [row.name, row.brand, row.strength ?? '', row.packSize ?? '']
@@ -198,7 +195,11 @@ export class MedicineImportHandler implements BulkHandler<MedicineRow> {
     return { userId: user.id, role: user.role }
   }
 
-  async validateBatch(rows: ParsedRow<MedicineRow>[], _scope: BulkScope): Promise<RowIssue[]> {
+  async validateBatch(
+    rows: ParsedRow<MedicineRow>[],
+    _scope: BulkScope,
+    _tx: PrismaTx,
+  ): Promise<RowIssue[]> {
     const issues: RowIssue[] = []
 
     for (const row of rows) {
@@ -217,8 +218,12 @@ export class MedicineImportHandler implements BulkHandler<MedicineRow> {
     return issues
   }
 
-  async classifyBatch(rows: ParsedRow<MedicineRow>[], scope: BulkScope): Promise<RowPlan[]> {
-    const existing = await this.findExisting(rows, scope)
+  async classifyBatch(
+    rows: ParsedRow<MedicineRow>[],
+    scope: BulkScope,
+    tx: PrismaTx,
+  ): Promise<RowPlan[]> {
+    const existing = await this.findExisting(rows, scope, tx)
 
     return rows.map((row) => {
       const key = this.naturalKey(row.data)
@@ -238,7 +243,7 @@ export class MedicineImportHandler implements BulkHandler<MedicineRow> {
     scope: BulkScope,
     tx: PrismaTx,
   ): Promise<BatchResult> {
-    const existing = await this.findExisting(rows, scope)
+    const existing = await this.findExisting(rows, scope, tx)
     let created = 0
     let updated = 0
 
@@ -280,11 +285,12 @@ export class MedicineImportHandler implements BulkHandler<MedicineRow> {
   private async findExisting(
     rows: ParsedRow<MedicineRow>[],
     _scope: BulkScope,
+    tx: PrismaTx,
   ): Promise<Map<string, string>> {
     const names = [...new Set(rows.map((row) => row.data.name))]
     const brands = [...new Set(rows.map((row) => row.data.brand))]
 
-    const candidates = await this.prisma.medicine.findMany({
+    const candidates = await tx.medicine.findMany({
       where: {
         name: { in: names, mode: 'insensitive' },
         brand: { in: brands, mode: 'insensitive' },
