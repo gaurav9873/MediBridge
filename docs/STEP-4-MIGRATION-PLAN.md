@@ -1,8 +1,26 @@
 # Step 4 — retire the duplicate domain models
 
-The last blocking item before Foundation v1.0. This is a complete, executable
-plan: everything below was measured against the code and database at commit
-`3ebd23e`, so no rediscovery is needed.
+> **DONE** — commit `19ca1a9`, one sitting, one commit, as planned.
+>
+> Kept as the record of what was planned versus what the code actually
+> required. Three things the plan did not account for, each found by measuring
+> rather than assuming:
+>
+> 1. `companies.gstNumber` is null, so the planned `gstNumber` join would have
+>    matched nothing. A temp mapping table correlates old ids to new instead.
+> 2. RLS is `FORCE`d, so the migration has to set `app.bypass_rls` — without it
+>    every statement below silently updates zero rows and reports success.
+> 3. Three CHECK constraints (radius range, cutoff format, non-negative
+>    delivery charge) lived on `distributor_profiles` and would have been
+>    dropped with the table. They moved to `warehouses`.
+>
+> One decision the plan left open was settled first: in MARKETPLACE mode a
+> distributor becomes **its own tenant Company** linked by `CompanyLink`, not a
+> warehouse of the marketplace. Everything it owns moved with it, because RLS
+> would otherwise have hidden a seller's own stock from it.
+
+This is a complete, executable plan: everything below was measured against the
+code and database at commit `3ebd23e`.
 
 **Do it in one sitting, one commit.** A partial migration leaves _three_ models
 rather than two, which is worse than the current state.

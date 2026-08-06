@@ -166,14 +166,30 @@ this already caught `company_auth_methods` shipping without a policy.
 ```
   Tenant data          Service → TenantPrismaService.run()      RLS applies
   Background job       Worker  → TenantPrismaService.runAs(id)  RLS applies
+  Before a tenant      Auth,   → runPreTenant()                 RLS bypassed
+                       resolver
   Platform-wide        Admin   → runAsPlatform(reason)          RLS bypassed, logged
-  Infrastructure       PrismaService                            RLS bypassed
+  Infrastructure       PrismaService                            job bookkeeping only
 ```
 
-`PrismaService` uses the owner connection and **bypasses RLS entirely**. It
-exists for migrations, health checks and the tenancy layer itself. One direct
-import in a feature service is a cross-tenant leak that no test would notice,
-because the query looks perfectly correct — so lint forbids it.
+**Two database roles.** The API connects as `medibridge_app`
+(`APP_DATABASE_URL`), which has DML and neither `SUPERUSER` nor `BYPASSRLS`.
+Migrations and the seed connect as the owner (`DATABASE_URL`). This is not
+tidiness: Postgres exempts superusers from every policy, and the API ran as one
+for a while, which made every tenant policy inert. `TenantPrismaService` now
+refuses to boot as a role that can bypass RLS.
+
+`runPreTenant()` covers the three lookups that legitimately precede tenancy —
+resolving a host to a company, reading that company's branding, and identifying
+a user. Scoping them would be circular. It is separate from `runAsPlatform()`
+so that "we had no tenant yet" never gets confused with "we chose to read
+everything".
+
+One direct `PrismaService` import in a feature service is a cross-tenant leak
+that no test would notice, because the query looks perfectly correct — so lint
+forbids it. The exception list is four files: `tenant-prisma.service.ts`, which
+wraps the client; `token.service.ts` and `password.provider.ts`, whose tables
+have no `companyId` to scope by; and the health controller.
 
 ---
 
@@ -257,10 +273,11 @@ So the browser and the server never disagree about wording.
 
 Honest list, as of this commit:
 
-| Gap                                                                                    | Impact                                                                                                            |
-| -------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| The **bulk engine** still uses `PrismaService`                                         | It runs in the worker, outside a request, so it needs `runAs(companyId)`. Scoped lint exception, next task.       |
-| **Admin module** still uses `PrismaService`                                            | Platform-owner surfaces are tenant-wide by design, but they should use `runAsPlatform()` so the access is logged. |
-| `DistributorProfile` / `RetailerProfile` **still exist** beside `Company` / `Customer` | The step-4 breaking migration. Both models are live; the marketplace code still reads the old ones.               |
-| `@Roles()` still used on existing routes                                               | `PermissionGuard` is registered and roles are seeded, but no route uses `@RequirePermission()` yet.               |
-| Web app is **not tenant-aware**                                                        | `/tenant/branding` exists; the UI does not consume it.                                                            |
+| Gap                                      | Impact                                                                                                                                     |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| **No CI**                                | Nothing re-runs `typecheck`, lint, build, the drift guard or `verify:isolation` on push. This is why three false "verified" claims survived. |
+| **No automated tests**                   | `jest` is configured, zero spec files. Tests begin with Phase 2 per MODULE-STANDARD.md; isolation is covered by `verify:isolation`.         |
+| `@Roles()` still used on existing routes | `PermissionGuard` is registered and roles are seeded, but no route uses `@RequirePermission()` yet.                                         |
+| Web app is **not tenant-aware**          | `/tenant/branding` exists and is verified per tenant; the UI does not consume it.                                                           |
+| **No platform-owner account**            | `runAsPlatform()` and the `PLATFORM_*` keys exist, but no user has `companyId = NULL`, so nothing reaches them by login.                    |
+| Medicine rules are not a module          | Specified in MULTI-TENANCY.md; still inside the medicine bulk handler.                                                                     |

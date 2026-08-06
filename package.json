@@ -29,7 +29,8 @@
     "db:studio": "npm run db:studio -w @medibridge/api",
     "setup": "npm install && npm run db:up && node scripts/wait-for-db.mjs && npm run db:migrate && npm run db:seed",
     "clean": "turbo run clean && rm -rf node_modules",
-    "postinstall": "npm run db:generate -w @medibridge/api"
+    "postinstall": "npm run db:generate -w @medibridge/api",
+    "verify:isolation": "node scripts/verify-tenant-isolation.mjs"
   },
   "overrides": {
     "@nestjs/swagger": {

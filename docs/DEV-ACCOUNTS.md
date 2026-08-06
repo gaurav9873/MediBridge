@@ -67,20 +67,53 @@ produces a mix of outcomes without any setup:
 | Kumar Pharmacy (Mumbai) | Wellness (Mumbai) | 4.9 km   | `SAME_DAY` |
 | Kumar Pharmacy (Mumbai) | MedPlus (Pune)    | 134.8 km | `NEXT_DAY` |
 
+## Tenants
+
+Four companies are seeded. A distributor is a **tenant of its own**, not a row
+inside MediBridge's tenant — its staff, stock and payouts belong to it, and
+Row-Level Security keeps one seller out of another's data.
+
+| Company                     | Mode                  | What it is                            |
+| --------------------------- | --------------------- | ------------------------------------- |
+| `MediBridge`                | `MARKETPLACE`         | Tenant #1 — the marketplace operator  |
+| `HealthPlus Distributors`   | `PRIVATE_DISTRIBUTOR` | The other mode, so both have real data |
+| `MedPlus Wholesale Pvt Ltd` | `MARKETPLACE`         | Seller, linked to MediBridge          |
+| `Wellness Distributors LLP` | `MARKETPLACE`         | Seller, linked to MediBridge          |
+
+Retailers are `Customer` rows on MediBridge; the two distributors' logins belong
+to their own companies. To act as a specific tenant against the API, send its id:
+
+```bash
+curl -H "x-tenant-id: <company uuid>" http://localhost:4000/api/v1/tenant/branding
+```
+
 ## Database access
 
-For DBeaver, Prisma Studio, or `psql`:
+**Two roles, deliberately.** The application must not be able to bypass
+Row-Level Security — for a while it could, and every tenant policy was inert as
+a result.
 
-| Field    | Value            |
-| -------- | ---------------- |
-| Host     | `localhost`      |
-| Port     | `5432`           |
-| Database | `medibridge`     |
-| Username | `medibridge`     |
-| Password | `medibridge_dev` |
+| Role             | Use it for                                    | Password             |
+| ---------------- | --------------------------------------------- | -------------------- |
+| `medibridge`     | Migrations, seed, DBeaver, Prisma Studio      | `medibridge_dev`     |
+| `medibridge_app` | The running API only (`APP_DATABASE_URL`)     | `medibridge_app_dev` |
 
-These match `docker-compose.yml`. Prisma Studio (`npm run db:studio`) needs no
-credentials — it reads `DATABASE_URL` from `.env`.
+| Field    | Value        |
+| -------- | ------------ |
+| Host     | `localhost`  |
+| Port     | `5432`       |
+| Database | `medibridge` |
+
+`medibridge` is the owner and **bypasses RLS** — which is what makes it useful
+for browsing, and useless for testing isolation. To check isolation, use the
+application role:
+
+```bash
+npm run verify:isolation
+```
+
+Prisma Studio (`npm run db:studio`) reads `DATABASE_URL`, so it sees everything.
+Treat it as a viewer.
 
 ## Changing the password
 

@@ -96,15 +96,64 @@ filtered out; it is never returned.
 exchange, tenant isolation stops depending on every developer remembering
 something.
 
-**Super admin** connects as a role with `BYPASSRLS` through a separate Prisma
-client, so platform-wide queries are an explicit, auditable choice rather than
-an accident.
+### The role matters more than the policies
 
-### Enforced in the type system too
+Postgres exempts **superusers** and roles with **`BYPASSRLS`** from every policy,
+and `FORCE ROW LEVEL SECURITY` does not change that — it only subjects the table
+owner. So a correct, complete set of policies protects nothing if the
+application connects as the wrong role.
 
-Belt and braces: a Prisma client extension that refuses at runtime if a query
-touches a tenant table without a company context set. That turns "we forgot" into
-a loud error in development rather than a silent leak in production.
+That is not hypothetical. This project ran that way: the API connected as the
+owner, which was a superuser, and every policy was inert. Setting
+`app.company_id` to one tenant and counting another tenant's rows returned all
+of them.
+
+Two roles, therefore:
+
+| Role             | Privileges                        | Used by                             |
+| ---------------- | --------------------------------- | ----------------------------------- |
+| `medibridge`     | Owner. DDL. Bypasses RLS.         | Migrations, seed, tooling           |
+| `medibridge_app` | DML only. `NOSUPERUSER`, `NOBYPASSRLS`. | The running API (`APP_DATABASE_URL`) |
+
+And a boot check, because the failure mode is silence:
+
+```
+Row-Level Security applies to this connection (role: medibridge_app)
+```
+
+If that role could bypass RLS, the API **refuses to start**. `npm run
+verify:isolation` performs the same checks as the application role, on demand.
+
+### Three policy shapes
+
+| Shape           | Rule                                            | Tables                                   |
+| --------------- | ----------------------------------------------- | ---------------------------------------- |
+| **STRICT**      | `companyId = current tenant`                    | Most tenant tables                       |
+| **SHARED**      | `companyId IS NULL OR = current tenant`         | `medicines` — the global catalogue       |
+| **MARKETPLACE** | STRICT, plus reads of linked sellers' rows      | `companies`, `warehouses`, `medicine_offers`, warehouse addresses |
+
+MARKETPLACE exists because a seller is a tenant of its own. Without it, strict
+isolation would hide a seller's shop window from the buyers meant to shop it.
+It is a **`FOR SELECT`** policy only: permissive policies OR together for reads,
+while `tenant_isolation` remains the only policy governing writes. A marketplace
+reads its sellers' offers and writes none of them.
+
+`inventory_items` is deliberately **not** marketplace-readable. The offer
+projection is the shop window; batch numbers, costs and expiries stay private.
+
+### Lookups from before a tenant exists
+
+Three things happen before there is a tenant to scope by, and each is how the
+tenant gets decided:
+
+- resolving a host, domain or slug to a company
+- fetching that company's branding for the login page
+- identifying a user — the tenant is derived **from** the user
+
+Scoping these would be circular, so they run through `runPreTenant()`: narrowly
+named, unlogged, and distinct from `runAsPlatform()` which is for deliberate
+platform-wide administration. What makes it safe is what follows — `AuthService`
+refuses a credential whose company does not match the portal it arrived on.
 
 ---
 
