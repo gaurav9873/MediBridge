@@ -1,0 +1,44 @@
+# dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# builds
+dist/
+build/
+.next/
+out/
+*.tsbuildinfo
+
+# turbo
+.turbo/
+
+# env — never commit real secrets
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# logs
+*.log
+npm-debug.log*
+logs/
+
+# testing
+coverage/
+
+# editors / OS
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+
+# prisma
+apps/api/prisma/*.db
+# Generated from schema.prisma by `prisma generate` — recreated on install,
+# so committing it would just add churn to every schema change.
+apps/api/src/generated/
+
+# uploads (local dev only — S3 in production)
+uploads/

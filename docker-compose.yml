@@ -1,0 +1,52 @@
+name: medibridge
+
+services:
+  # PostgreSQL 17 with PostGIS 3.5.
+  # PostGIS powers the delivery-radius logic (ST_DWithin + GiST index) so we never
+  # hand-roll haversine math in application code.
+  postgres:
+    # imresamu/postgis is the multi-arch PostGIS build — the official postgis/postgis
+    # image publishes amd64 only, which does not run on Apple Silicon. Same entrypoint,
+    # same env vars, same extensions: a drop-in replacement.
+    image: imresamu/postgis:17-3.5
+    container_name: medibridge-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: medibridge
+      POSTGRES_PASSWORD: medibridge_dev
+      POSTGRES_DB: medibridge
+      # Deterministic collation so ORDER BY behaves identically on every machine.
+      POSTGRES_INITDB_ARGS: '--encoding=UTF8 --locale=C'
+    ports:
+      # 5432 is free on this machine (local MySQL owns 3306 and stays untouched).
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U medibridge -d medibridge']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  # Redis 7 for sessions, refresh-token rotation, cart state, search cache and
+  # the BullMQ notification queue.
+  redis:
+    image: redis:7-alpine
+    container_name: medibridge-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    ports:
+      # 6380, not 6379 — the Homebrew Redis already running on this Mac keeps 6379.
+      - '6380:6379'
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  postgres_data:
+  redis_data:

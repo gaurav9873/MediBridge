@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "target": "ES2023",
+    "outDir": "./dist",
+    "baseUrl": "./",
+    "strictPropertyInitialization": false,
+    "noUncheckedIndexedAccess": false,
+    /*
+     * Off deliberately. `nest build` wipes dist via deleteOutDir, but tsc's
+     * .tsbuildinfo still reports everything as up to date — so an incremental
+     * rebuild emits nothing and leaves an empty dist that fails at runtime
+     * with a confusing MODULE_NOT_FOUND.
+     */
+    "incremental": false
+  }
+}

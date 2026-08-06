@@ -1,0 +1,1155 @@
+// MediBridge B2B — database schema
+//
+// Conventions used throughout:
+//   * Money is ALWAYS an Int of paise. Never Float, never Decimal-as-rupees.
+//     100 paise = ₹1. See packages/types/src/money.ts.
+//   * Enums mirror packages/types/src/enums.ts exactly. Change both together.
+//   * Geography lives on Address.location, a GENERATED column derived from
+//     latitude/longitude and indexed with GiST. It powers ST_DWithin for the
+//     Same-Day delivery radius. See migration 0001 for the raw SQL.
+//   * Order lines snapshot the medicine name, batch and price at purchase time
+//     so an edit to the catalogue can never rewrite someone's order history.
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "cjs"
+  runtime      = "nodejs"
+}
+
+// Prisma 7 no longer accepts `url` here — the connection string lives in
+// prisma.config.ts for the CLI, and reaches the client through a driver adapter.
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum UserRole {
+  RETAILER
+  DISTRIBUTOR
+  ADMIN
+  DELIVERY
+}
+
+enum AccountStatus {
+  PENDING_VERIFICATION
+  ACTIVE
+  SUSPENDED
+  REJECTED
+}
+
+enum DocumentType {
+  DRUG_LICENSE
+  GST_CERTIFICATE
+}
+
+enum VerificationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+/// Schedule X is blocked platform-wide in the MVP — it carries record-keeping
+/// duties (Form 2C register, duplicate prescriptions) we are not building yet.
+enum DrugSchedule {
+  NONE
+  H
+  H1
+  X
+}
+
+enum MedicineForm {
+  TABLET
+  CAPSULE
+  SYRUP
+  INJECTION
+  OINTMENT
+  CREAM
+  DROPS
+  POWDER
+  INHALER
+  SPRAY
+  GEL
+  SACHET
+  OTHER
+}
+
+enum SaleUnit {
+  STRIP
+  BOX
+  BOTTLE
+  VIAL
+  TUBE
+  PIECE
+  PACK
+}
+
+enum OrderStatus {
+  PENDING_PAYMENT
+  CONFIRMED
+  ACCEPTED
+  PACKED
+  DISPATCHED
+  DELIVERED
+  CANCELLED
+  REJECTED
+  RETURNED
+}
+
+enum DeliveryMode {
+  SAME_DAY
+  NEXT_DAY
+}
+
+enum DeliveryStatus {
+  NOT_STARTED
+  ASSIGNED
+  OUT_FOR_DELIVERY
+  DELIVERED
+  FAILED
+  RETURNED
+}
+
+enum PaymentType {
+  TOKEN
+  BALANCE
+  REFUND
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+  PARTIALLY_REFUNDED
+}
+
+enum PaymentMethod {
+  UPI
+  CARD
+  NETBANKING
+  WALLET
+  CASH
+}
+
+enum PaymentGateway {
+  RAZORPAY
+  CASHFREE
+  MANUAL
+}
+
+enum SettlementStatus {
+  PENDING
+  PROCESSING
+  PAID
+  FAILED
+}
+
+enum NotificationChannel {
+  SMS
+  EMAIL
+  WHATSAPP
+  IN_APP
+}
+
+enum NotificationEvent {
+  ORDER_PLACED
+  ORDER_CONFIRMED
+  ORDER_ACCEPTED
+  ORDER_REJECTED
+  ORDER_PACKED
+  ORDER_DISPATCHED
+  ORDER_DELIVERED
+  ORDER_CANCELLED
+  PAYMENT_RECEIVED
+  PAYMENT_FAILED
+  REFUND_INITIATED
+  ACCOUNT_APPROVED
+  ACCOUNT_REJECTED
+  LICENSE_EXPIRING
+  LICENSE_EXPIRED
+  LOW_STOCK
+  BATCH_EXPIRING
+  NEW_ORDER_RECEIVED
+  SETTLEMENT_PAID
+}
+
+enum MedicineRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum ProblemCategory {
+  MISSING_ITEM
+  DAMAGED
+  WRONG_ITEM
+  EXPIRY_TOO_SOON
+  OTHER
+}
+
+enum ProblemStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+// ---------------------------------------------------------------------------
+// Identity
+// ---------------------------------------------------------------------------
+
+model User {
+  id            String        @id @default(uuid()) @db.Uuid
+  /// Primary sign-in identifier. Stored as bare 10 digits, no +91.
+  phone         String        @unique @db.VarChar(10)
+  email         String        @unique @db.VarChar(255)
+  passwordHash  String        @db.VarChar(255)
+  fullName      String        @db.VarChar(120)
+  role          UserRole
+  accountStatus AccountStatus @default(PENDING_VERIFICATION)
+
+  phoneVerifiedAt DateTime?
+  emailVerifiedAt DateTime?
+  lastLoginAt     DateTime?
+
+  /// Set by an admin when pausing an account. Shown to support, not the user.
+  suspensionReason String? @db.Text
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  /// Soft delete — orders and invoices must survive an account closure.
+  deletedAt DateTime?
+
+  retailerProfile    RetailerProfile?
+  distributorProfile DistributorProfile?
+  addresses          Address[]
+  documents          Document[]
+  refreshTokens      RefreshToken[]
+  cart               Cart?
+  orderGroups        OrderGroup[]
+  retailerOrders     Order[]                  @relation("RetailerOrders")
+  notifications      Notification[]
+  notificationPrefs  NotificationPreference[]
+  auditLogs          AuditLog[]               @relation("AuditActor")
+  reviewedDocuments  Document[]               @relation("DocumentReviewer")
+  statusChanges      OrderStatusHistory[]
+  reportedProblems   ProblemReport[]          @relation("ProblemReporter")
+  resolvedProblems   ProblemReport[]          @relation("ProblemResolver")
+  medicineRequests   MedicineRequest[]        @relation("MedicineRequester")
+  reviewedRequests   MedicineRequest[]        @relation("MedicineRequestReviewer")
+  createdMedicines   Medicine[]               @relation("MedicineCreator")
+  updatedSettings    Setting[]
+  initiatedRefunds   Refund[]
+  bulkJobs           BulkJob[]
+
+  @@index([role, accountStatus])
+  @@index([deletedAt])
+  @@map("users")
+}
+
+model RetailerProfile {
+  id           String @id @default(uuid()) @db.Uuid
+  userId       String @unique @db.Uuid
+  businessName String @db.VarChar(160)
+  gstNumber    String @unique @db.VarChar(15)
+
+  /// Denormalised from the approved DRUG_LICENSE document so the ordering
+  /// guard is a single cheap read instead of a join on every checkout.
+  drugLicenseNumber String?   @db.VarChar(60)
+  licenseExpiresOn  DateTime? @db.Date
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([licenseExpiresOn])
+  @@map("retailer_profiles")
+}
+
+model DistributorProfile {
+  id           String @id @default(uuid()) @db.Uuid
+  userId       String @unique @db.Uuid
+  businessName String @db.VarChar(160)
+  gstNumber    String @unique @db.VarChar(15)
+
+  drugLicenseNumber String?   @db.VarChar(60)
+  licenseExpiresOn  DateTime? @db.Date
+
+  /// The warehouse this distributor ships from. Its lat/lng is one half of
+  /// every Same-Day radius calculation.
+  hubAddressId String?  @unique @db.Uuid
+  hubAddress   Address? @relation("DistributorHub", fields: [hubAddressId], references: [id])
+
+  /// Retailers inside this many km may choose Same-Day Delivery.
+  sameDayRadiusKm        Int      @default(25)
+  /// Orders placed after this local time roll to Next-Day. Stored "HH:MM".
+  sameDayCutoffTime      String   @default("14:00") @db.VarChar(5)
+  deliveryChargePaise    Int      @default(0)
+  freeDeliveryAbovePaise Int?
+  /// Distributor's own kill switch — hides all their stock without deleting it.
+  isAcceptingOrders      Boolean  @default(true)
+
+  // Weekly settlement destination.
+  bankAccountHolder String? @db.VarChar(160)
+  bankAccountNumber String? @db.VarChar(34)
+  bankIfsc          String? @db.VarChar(11)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  inventoryItems InventoryItem[]
+  orders         Order[]         @relation("DistributorOrders")
+  settlements    Settlement[]
+  offers         MedicineOffer[]
+
+  @@index([isAcceptingOrders])
+  @@index([licenseExpiresOn])
+  @@map("distributor_profiles")
+}
+
+/// Uploaded drug licences and GST certificates, plus their approval trail.
+model Document {
+  id       String       @id @default(uuid()) @db.Uuid
+  userId   String       @db.Uuid
+  type     DocumentType
+  /// Licence or GST number as printed on the document.
+  number   String       @db.VarChar(60)
+  /// Only drug licences expire.
+  expiresOn DateTime?   @db.Date
+
+  /// S3 object key. Never a public URL — these are served via signed links.
+  fileKey   String @db.VarChar(500)
+  fileName  String @db.VarChar(255)
+  mimeType  String @db.VarChar(100)
+  sizeBytes Int
+
+  verificationStatus VerificationStatus @default(PENDING)
+  reviewedById       String?            @db.Uuid
+  reviewedAt         DateTime?
+  /// Shown verbatim to the user, so it must be written in plain English.
+  rejectionReason    String?            @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user     User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reviewer User? @relation("DocumentReviewer", fields: [reviewedById], references: [id])
+
+  /// The same licence number must not appear on two accounts.
+  @@unique([type, number])
+  @@index([verificationStatus, createdAt])
+  @@index([userId, type])
+  @@map("documents")
+}
+
+model Address {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+
+  label        String  @db.VarChar(40)
+  line1        String  @db.VarChar(200)
+  line2        String? @db.VarChar(200)
+  city         String  @db.VarChar(80)
+  state        String  @db.VarChar(80)
+  pincode      String  @db.VarChar(6)
+  contactPhone String  @db.VarChar(10)
+
+  /// Source of truth for position. `location` below is derived from these.
+  latitude  Float
+  longitude Float
+
+  /// GENERATED ALWAYS column: ST_SetSRID(ST_MakePoint(longitude, latitude), 4326).
+  /// Created in migration 0001 and indexed with GiST. Prisma cannot read this
+  /// type, which is fine — only raw ST_DWithin queries touch it.
+  location Unsupported("geography(Point, 4326)")?
+
+  isDefault Boolean   @default(false)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  user          User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  distributorOf DistributorProfile? @relation("DistributorHub")
+  orderGroups   OrderGroup[]
+  orders        Order[]
+
+  @@index([userId, isDefault])
+  @@index([pincode])
+  @@map("addresses")
+}
+
+/// Rotating refresh tokens. Kept in Postgres rather than Redis so that
+/// "sign out everywhere" and session auditing survive a cache flush.
+model RefreshToken {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  /// SHA-256 of the token. The token itself is never stored.
+  tokenHash String   @unique @db.VarChar(64)
+  expiresAt DateTime
+
+  revokedAt            DateTime?
+  /// Set when this token is rotated, so a replayed old token is detectable.
+  replacedByTokenHash  String?   @db.VarChar(64)
+
+  userAgent String? @db.VarChar(400)
+  ipAddress String? @db.VarChar(45)
+
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, revokedAt])
+  @@index([expiresAt])
+  @@map("refresh_tokens")
+}
+
+// ---------------------------------------------------------------------------
+// Catalogue
+// ---------------------------------------------------------------------------
+
+/// Admin-owned master list. Distributors map their stock onto these rows, which
+/// is what makes cross-distributor price comparison possible — without it,
+/// "Crocin 500" and "crocin 500mg" become two unrelated products.
+model Medicine {
+  id          String       @id @default(uuid()) @db.Uuid
+  name        String       @db.VarChar(200)
+  brand       String       @db.VarChar(120)
+  /// Active salt. Retailers search by this at least as often as by brand.
+  composition String       @db.VarChar(300)
+  form        MedicineForm
+  strength    String?      @db.VarChar(60)
+  packSize    String?      @db.VarChar(60)
+  manufacturer String?     @db.VarChar(160)
+
+  hsnCode String @db.VarChar(8)
+  /// Whole percentage: 0, 5, 12 or 18.
+  gstRate Int    @default(12)
+
+  schedule               DrugSchedule @default(NONE)
+  isPrescriptionRequired Boolean      @default(false)
+  /// Set false to delist. Schedule X rows are forced false by the service layer.
+  isActive               Boolean      @default(true)
+
+  /// GENERATED tsvector over name/brand/composition, GIN-indexed in migration
+  /// 0001. Weighted A/B/C so a brand-name hit outranks a composition hit.
+  searchVector Unsupported("tsvector")?
+
+  createdById String?  @db.Uuid
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  createdBy      User?             @relation("MedicineCreator", fields: [createdById], references: [id])
+  inventoryItems InventoryItem[]
+  orderItems     OrderItem[]
+  requests       MedicineRequest[]
+  offers         MedicineOffer[]
+
+  @@unique([name, brand, strength, packSize])
+  @@index([isActive, schedule])
+  @@index([composition])
+  @@map("medicines")
+}
+
+/// A distributor asking for a medicine that is missing from the master list.
+model MedicineRequest {
+  id            String                @id @default(uuid()) @db.Uuid
+  requestedById String                @db.Uuid
+  name          String                @db.VarChar(200)
+  brand         String                @db.VarChar(120)
+  composition   String?               @db.VarChar(300)
+  form          MedicineForm?
+  strength      String?               @db.VarChar(60)
+  notes         String?               @db.Text
+  status        MedicineRequestStatus @default(PENDING)
+
+  reviewedById    String?   @db.Uuid
+  reviewedAt      DateTime?
+  rejectionReason String?   @db.Text
+  /// Populated when the request is approved and the medicine created.
+  medicineId      String?   @db.Uuid
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  requestedBy User      @relation("MedicineRequester", fields: [requestedById], references: [id], onDelete: Cascade)
+  reviewer    User?     @relation("MedicineRequestReviewer", fields: [reviewedById], references: [id])
+  medicine    Medicine? @relation(fields: [medicineId], references: [id])
+
+  @@index([status, createdAt])
+  @@map("medicine_requests")
+}
+
+// ---------------------------------------------------------------------------
+// Inventory
+// ---------------------------------------------------------------------------
+
+/// One BATCH of one medicine held by one distributor.
+///
+/// Batch-level tracking is not optional in pharma: every unit sold must carry a
+/// batch number and expiry, and stock is picked oldest-expiry-first (FEFO).
+model InventoryItem {
+  id            String @id @default(uuid()) @db.Uuid
+  distributorId String @db.Uuid
+  medicineId    String @db.Uuid
+
+  batchNumber String   @db.VarChar(60)
+  expiryDate  DateTime @db.Date
+
+  mrpPaise          Int
+  /// Set by the distributor. Enforced <= mrpPaise by a CHECK constraint.
+  sellingPricePaise Int
+
+  /// Physical stock on the shelf.
+  quantity          Int      @default(0)
+  /// Held for carts mid-checkout. Available = quantity - reservedQuantity.
+  reservedQuantity  Int      @default(0)
+  unit              SaleUnit @default(STRIP)
+  minOrderQuantity  Int      @default(1)
+  lowStockThreshold Int      @default(10)
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  distributor  DistributorProfile @relation(fields: [distributorId], references: [id], onDelete: Cascade)
+  medicine     Medicine           @relation(fields: [medicineId], references: [id])
+  cartItems    CartItem[]
+  orderItems   OrderItem[]
+  reservations StockReservation[]
+
+  @@unique([distributorId, medicineId, batchNumber])
+  /// Covers the hot search path: live stock for a medicine, oldest expiry first.
+  @@index([medicineId, isActive, expiryDate])
+  @@index([distributorId, isActive])
+  @@index([expiryDate])
+  @@map("inventory_items")
+}
+
+/// A short-lived hold on stock while a retailer completes payment.
+///
+/// Created inside the same transaction that takes a row lock on the inventory
+/// item, and swept by a background job once `expiresAt` passes.
+model StockReservation {
+  id              String @id @default(uuid()) @db.Uuid
+  inventoryItemId String @db.Uuid
+  quantity        Int
+
+  /// Set once the reservation is attached to a real order.
+  orderId String? @db.Uuid
+  /// Before an order exists, the reservation belongs to a cart.
+  cartId  String? @db.Uuid
+
+  expiresAt  DateTime
+  releasedAt DateTime?
+  consumedAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  inventoryItem InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt, releasedAt, consumedAt])
+  @@index([inventoryItemId])
+  @@index([cartId])
+  @@map("stock_reservations")
+}
+
+// ---------------------------------------------------------------------------
+// Cart
+// ---------------------------------------------------------------------------
+
+/// Server-authoritative cart. Prices are always re-read from inventory at
+/// checkout — `addedAtPricePaise` exists only to detect and explain a change.
+model Cart {
+  id         String   @id @default(uuid()) @db.Uuid
+  retailerId String   @unique @db.Uuid
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  retailer User       @relation(fields: [retailerId], references: [id], onDelete: Cascade)
+  items    CartItem[]
+
+  @@map("carts")
+}
+
+model CartItem {
+  id              String @id @default(uuid()) @db.Uuid
+  cartId          String @db.Uuid
+  inventoryItemId String @db.Uuid
+  quantity        Int
+
+  /// The price the retailer saw when adding this. Compared at checkout.
+  addedAtPricePaise Int
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  cart          Cart          @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  inventoryItem InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
+
+  @@unique([cartId, inventoryItemId])
+  @@map("cart_items")
+}
+
+// ---------------------------------------------------------------------------
+// Orders
+// ---------------------------------------------------------------------------
+
+/// One checkout. A cart spanning several distributors produces ONE group and
+/// several Orders — the retailer pays once, each distributor fulfils separately.
+model OrderGroup {
+  id          String @id @default(uuid()) @db.Uuid
+  /// Human-facing, e.g. "MB-2026-000123".
+  groupNumber String @unique @db.VarChar(24)
+  retailerId  String @db.Uuid
+  addressId   String @db.Uuid
+
+  totalPaise   Int
+  tokenPaise   Int
+  balancePaise Int
+  /// Snapshotted from Setting at checkout, so changing the platform rate later
+  /// never rewrites what an existing order asked for.
+  tokenPercent Int
+
+  notes String? @db.Text
+
+  /// Rejects a double-tapped checkout button.
+  idempotencyKey String @unique @db.Uuid
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  retailer User      @relation(fields: [retailerId], references: [id])
+  address  Address   @relation(fields: [addressId], references: [id])
+  orders   Order[]
+  payments Payment[]
+
+  @@index([retailerId, createdAt])
+  @@map("order_groups")
+}
+
+model Order {
+  id           String @id @default(uuid()) @db.Uuid
+  orderNumber  String @unique @db.VarChar(24)
+  orderGroupId String @db.Uuid
+
+  retailerId    String @db.Uuid
+  distributorId String @db.Uuid
+  addressId     String @db.Uuid
+
+  status       OrderStatus  @default(PENDING_PAYMENT)
+  deliveryMode DeliveryMode
+
+  subtotalPaise       Int
+  gstPaise            Int
+  deliveryChargePaise Int @default(0)
+  totalPaise          Int
+  tokenPaise          Int
+  balancePaise        Int
+  tokenPercent        Int
+
+  /// Distance from distributor hub to delivery address, in km, at order time.
+  /// Stored because the radius setting can change afterwards and we need to
+  /// justify why this order was offered Same-Day.
+  distanceKm Float?
+
+  expectedDeliveryAt DateTime?
+  acceptedAt         DateTime?
+  packedAt           DateTime?
+  dispatchedAt       DateTime?
+  deliveredAt        DateTime?
+  cancelledAt        DateTime?
+
+  cancellationReason String? @db.Text
+  rejectionReason    String? @db.Text
+  notes              String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  orderGroup    OrderGroup           @relation(fields: [orderGroupId], references: [id])
+  retailer      User                 @relation("RetailerOrders", fields: [retailerId], references: [id])
+  distributor   DistributorProfile   @relation("DistributorOrders", fields: [distributorId], references: [id])
+  address       Address              @relation(fields: [addressId], references: [id])
+  items         OrderItem[]
+  statusHistory OrderStatusHistory[]
+  payments      Payment[]
+  refunds       Refund[]
+  delivery      Delivery?
+  problems      ProblemReport[]
+  settlementItems SettlementItem[]
+
+  @@index([retailerId, status, createdAt])
+  @@index([distributorId, status, createdAt])
+  @@index([status, createdAt])
+  @@index([orderGroupId])
+  @@map("orders")
+}
+
+/// A line on an order.
+///
+/// Everything a receipt needs is snapshotted here. If the catalogue is edited
+/// or a distributor changes their price tomorrow, this row still shows what was
+/// actually bought and at what price.
+model OrderItem {
+  id              String @id @default(uuid()) @db.Uuid
+  orderId         String @db.Uuid
+  inventoryItemId String @db.Uuid
+  medicineId      String @db.Uuid
+
+  // --- snapshot at purchase time ---
+  medicineName String   @db.VarChar(200)
+  brand        String   @db.VarChar(120)
+  composition  String   @db.VarChar(300)
+  batchNumber  String   @db.VarChar(60)
+  expiryDate   DateTime @db.Date
+  unit         SaleUnit
+  hsnCode      String   @db.VarChar(8)
+  gstRate      Int
+
+  orderedQuantity Int
+  /// Set when a distributor can only supply part of the line. Null until then.
+  acceptedQuantity Int?
+
+  mrpPaise         Int
+  unitPricePaise   Int
+  lineSubtotalPaise Int
+  lineGstPaise      Int
+  lineTotalPaise    Int
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  order         Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  inventoryItem InventoryItem @relation(fields: [inventoryItemId], references: [id])
+  medicine      Medicine      @relation(fields: [medicineId], references: [id])
+
+  @@index([orderId])
+  @@map("order_items")
+}
+
+/// Append-only status trail. Drives the progress timeline the retailer sees.
+model OrderStatusHistory {
+  id          String       @id @default(uuid()) @db.Uuid
+  orderId     String       @db.Uuid
+  fromStatus  OrderStatus?
+  toStatus    OrderStatus
+  changedById String?      @db.Uuid
+  reason      String?      @db.Text
+  createdAt   DateTime     @default(now())
+
+  order     Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  changedBy User? @relation(fields: [changedById], references: [id])
+
+  @@index([orderId, createdAt])
+  @@map("order_status_history")
+}
+
+// ---------------------------------------------------------------------------
+// Payments
+// ---------------------------------------------------------------------------
+
+model Payment {
+  id           String  @id @default(uuid()) @db.Uuid
+  /// TOKEN payments belong to the group (one payment covers the whole cart).
+  orderGroupId String? @db.Uuid
+  /// BALANCE payments are per order, collected in cash by each distributor.
+  orderId      String? @db.Uuid
+
+  type    PaymentType
+  status  PaymentStatus  @default(PENDING)
+  method  PaymentMethod?
+  gateway PaymentGateway @default(RAZORPAY)
+
+  amountPaise         Int
+  refundedAmountPaise Int @default(0)
+
+  gatewayOrderId   String? @db.VarChar(120)
+  /// Unique so a replayed webhook cannot double-credit a payment.
+  gatewayPaymentId String? @unique @db.VarChar(120)
+  gatewaySignature String? @db.VarChar(255)
+
+  failureReason String? @db.Text
+  /// Raw gateway webhook body, kept verbatim for reconciliation disputes.
+  rawPayload    Json?
+
+  paidAt    DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  orderGroup OrderGroup? @relation(fields: [orderGroupId], references: [id])
+  order      Order?      @relation(fields: [orderId], references: [id])
+  refunds    Refund[]
+
+  @@index([orderGroupId])
+  @@index([orderId])
+  @@index([status, createdAt])
+  @@index([gatewayOrderId])
+  @@map("payments")
+}
+
+model Refund {
+  id        String @id @default(uuid()) @db.Uuid
+  paymentId String @db.Uuid
+  orderId   String @db.Uuid
+
+  amountPaise Int
+  reason      String        @db.Text
+  status      PaymentStatus @default(PENDING)
+
+  gatewayRefundId String? @unique @db.VarChar(120)
+  /// Null for automatic refunds (cancel before dispatch); set when an admin
+  /// approves a post-dispatch refund by hand.
+  initiatedById   String? @db.Uuid
+
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  payment     Payment @relation(fields: [paymentId], references: [id])
+  order       Order   @relation(fields: [orderId], references: [id])
+  initiatedBy User?   @relation(fields: [initiatedById], references: [id])
+
+  @@index([orderId])
+  @@index([status, createdAt])
+  @@map("refunds")
+}
+
+/// Weekly payout of collected token money to a distributor, minus platform fee.
+model Settlement {
+  id            String @id @default(uuid()) @db.Uuid
+  distributorId String @db.Uuid
+
+  periodStart DateTime @db.Date
+  periodEnd   DateTime @db.Date
+
+  grossPaise      Int
+  platformFeePaise Int
+  netPayablePaise Int
+
+  status    SettlementStatus @default(PENDING)
+  /// Bank reference for the transfer, shown to the distributor once paid.
+  utrNumber String?          @db.VarChar(40)
+  paidAt    DateTime?
+  failureReason String?      @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  distributor DistributorProfile @relation(fields: [distributorId], references: [id])
+  items       SettlementItem[]
+
+  @@unique([distributorId, periodStart, periodEnd])
+  @@index([status, periodEnd])
+  @@map("settlements")
+}
+
+model SettlementItem {
+  id           String @id @default(uuid()) @db.Uuid
+  settlementId String @db.Uuid
+  orderId      String @db.Uuid
+
+  grossPaise       Int
+  platformFeePaise Int
+  netPaise         Int
+
+  createdAt DateTime @default(now())
+
+  settlement Settlement @relation(fields: [settlementId], references: [id], onDelete: Cascade)
+  order      Order      @relation(fields: [orderId], references: [id])
+
+  @@unique([settlementId, orderId])
+  @@map("settlement_items")
+}
+
+// ---------------------------------------------------------------------------
+// Delivery
+// ---------------------------------------------------------------------------
+
+/// In the MVP the distributor delivers with their own people. MediBridge tracks
+/// status and verifies the handover with a 4-digit code the retailer reads out.
+model Delivery {
+  id      String @id @default(uuid()) @db.Uuid
+  orderId String @unique @db.Uuid
+
+  status DeliveryStatus @default(NOT_STARTED)
+  mode   DeliveryMode
+
+  deliveryPersonName  String? @db.VarChar(120)
+  deliveryPersonPhone String? @db.VarChar(10)
+
+  /// SHA-256 of the 4-digit code. The code itself is only ever shown to the
+  /// retailer in their app and never stored in the clear.
+  otpHash     String? @db.VarChar(64)
+  otpAttempts Int     @default(0)
+
+  assignedAt       DateTime?
+  outForDeliveryAt DateTime?
+  deliveredAt      DateTime?
+  failedAt         DateTime?
+  failureReason    String?   @db.Text
+
+  /// What the delivery person actually collected. Reconciled against the
+  /// order's balancePaise.
+  cashCollectedPaise Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@map("deliveries")
+}
+
+model ProblemReport {
+  id           String          @id @default(uuid()) @db.Uuid
+  orderId      String          @db.Uuid
+  reportedById String          @db.Uuid
+  category     ProblemCategory
+  description  String          @db.Text
+  status       ProblemStatus   @default(OPEN)
+
+  resolvedById String?   @db.Uuid
+  resolvedAt   DateTime?
+  resolution   String?   @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  order      Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  reportedBy User  @relation("ProblemReporter", fields: [reportedById], references: [id])
+  resolvedBy User? @relation("ProblemResolver", fields: [resolvedById], references: [id])
+
+  @@index([status, createdAt])
+  @@index([orderId])
+  @@map("problem_reports")
+}
+
+// ---------------------------------------------------------------------------
+// Notifications, settings, audit
+// ---------------------------------------------------------------------------
+
+model Notification {
+  id      String              @id @default(uuid()) @db.Uuid
+  userId  String              @db.Uuid
+  event   NotificationEvent
+  channel NotificationChannel
+
+  title String @db.VarChar(200)
+  body  String @db.Text
+  /// Deep-link target and template variables.
+  payload Json?
+
+  readAt        DateTime?
+  sentAt        DateTime?
+  failedAt      DateTime?
+  failureReason String?   @db.Text
+
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt, createdAt])
+  @@index([event, createdAt])
+  @@map("notifications")
+}
+
+model NotificationPreference {
+  id      String              @id @default(uuid()) @db.Uuid
+  userId  String              @db.Uuid
+  event   NotificationEvent
+  channel NotificationChannel
+  enabled Boolean             @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, event, channel])
+  @@map("notification_preferences")
+}
+
+/// Platform-wide business rules, editable from the Admin panel.
+/// Nothing in this table should ever need a code deploy to change.
+model Setting {
+  key         String   @id @db.VarChar(80)
+  value       Json
+  /// Plain-English explanation shown next to the field in Admin.
+  description String   @db.Text
+  updatedById String?  @db.Uuid
+  updatedAt   DateTime @updatedAt
+
+  updatedBy User? @relation(fields: [updatedById], references: [id])
+
+  @@map("settings")
+}
+
+model AuditLog {
+  id         String  @id @default(uuid()) @db.Uuid
+  actorId    String? @db.Uuid
+  action     String  @db.VarChar(80)
+  entityType String  @db.VarChar(60)
+  entityId   String  @db.VarChar(64)
+
+  before Json?
+  after  Json?
+
+  ipAddress String? @db.VarChar(45)
+  userAgent String? @db.VarChar(400)
+
+  createdAt DateTime @default(now())
+
+  actor User? @relation("AuditActor", fields: [actorId], references: [id])
+
+  @@index([entityType, entityId, createdAt])
+  @@index([actorId, createdAt])
+  @@map("audit_logs")
+}
+
+// ---------------------------------------------------------------------------
+// Bulk operations
+//
+// One engine serves every module. See docs/BULK-OPERATIONS.md.
+// ---------------------------------------------------------------------------
+
+enum BulkJobType {
+  MEDICINE_IMPORT
+  INVENTORY_IMPORT
+  INVENTORY_STOCK_UPDATE
+  INVENTORY_PRICE_UPDATE
+  INVENTORY_EXPIRY_UPDATE
+  INVENTORY_STATUS_UPDATE
+  USER_IMPORT
+}
+
+enum BulkJobStatus {
+  PENDING
+  VALIDATING
+  /// Dry run finished; nothing written yet, waiting on the user.
+  AWAITING_CONFIRMATION
+  IMPORTING
+  PAUSED
+  COMPLETED
+  /// Finished, but some rows were skipped. The error file lists them.
+  COMPLETED_WITH_ERRORS
+  FAILED
+  CANCELLED
+}
+
+/// One import run, from upload to report.
+///
+/// Doubles as the progress record (the worker updates processedRows each
+/// batch), the resume checkpoint, and the import-history row.
+model BulkJob {
+  id     String        @id @default(uuid()) @db.Uuid
+  type   BulkJobType
+  status BulkJobStatus @default(PENDING)
+
+  createdById String @db.Uuid
+  /// Distributor jobs are scoped to their own inventory. Null for admin jobs.
+  /// Always taken from the session, never from the uploaded file.
+  scopeId     String? @db.Uuid
+
+  fileKey   String @db.VarChar(500)
+  fileName  String @db.VarChar(255)
+  sizeBytes Int
+
+  /// Null until the file has been counted during validation.
+  totalRows     Int?
+  /// Also the resume checkpoint: on resume the worker skips rows up to here.
+  processedRows Int  @default(0)
+
+  createCount Int @default(0)
+  updateCount Int @default(0)
+  skipCount   Int @default(0)
+  errorCount  Int @default(0)
+  /// Set when the recorded-error cap is reached.
+  errorsTruncated Boolean @default(false)
+
+  /// Failed rows in template format plus an Error column, so the user can fix
+  /// and re-upload the same file unchanged.
+  errorFileKey  String? @db.VarChar(500)
+  /// Row-by-row outcome of the apply pass.
+  resultFileKey String? @db.VarChar(500)
+
+  /// Handler-specific options, e.g. { dryRun: true }.
+  options Json?
+
+  failureReason String?   @db.Text
+  queuedAt      DateTime  @default(now())
+  validatedAt   DateTime?
+  confirmedAt   DateTime?
+  finishedAt    DateTime?
+  updatedAt     DateTime  @updatedAt
+
+  createdBy User           @relation(fields: [createdById], references: [id])
+  errors    BulkJobError[]
+
+  @@index([createdById, queuedAt])
+  @@index([type, status])
+  @@index([status, queuedAt])
+  @@map("bulk_jobs")
+}
+
+model BulkJobError {
+  id        String  @id @default(uuid()) @db.Uuid
+  jobId     String  @db.Uuid
+  rowNumber Int
+  column    String? @db.VarChar(80)
+  value     String? @db.VarChar(500)
+  message   String  @db.Text
+  /// The original row, so the error file can be rebuilt without re-reading
+  /// the upload — and so the row survives even if the upload is purged.
+  rawRow    Json?
+
+  createdAt DateTime @default(now())
+
+  job BulkJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([jobId, rowNumber])
+  @@map("bulk_job_errors")
+}
+
+/// Search read model — one row per (medicine, distributor) with the best
+/// sellable offer. See migration 20260806120000_medicine_offers.
+///
+/// Maintained entirely by database triggers on inventory_items and medicines,
+/// so application code never writes here. Reading it replaces a four-table
+/// join plus aggregation with a single index-ordered scan.
+model MedicineOffer {
+  medicineId    String @db.Uuid
+  distributorId String @db.Uuid
+
+  bestPricePaise   Int
+  mrpPaise         Int
+  totalAvailable   Int
+  latestExpiry     DateTime @db.Date
+  minOrderQuantity Int
+
+  // Denormalised from Medicine so search needs no join.
+  name        String       @db.VarChar(200)
+  brand       String       @db.VarChar(120)
+  composition String       @db.VarChar(300)
+  form        MedicineForm
+  schedule    DrugSchedule
+
+  /// Copied from Medicine.searchVector by the trigger.
+  searchVector Unsupported("tsvector")
+
+  updatedAt DateTime @default(now())
+
+  medicine    Medicine           @relation(fields: [medicineId], references: [id], onDelete: Cascade)
+  distributor DistributorProfile @relation(fields: [distributorId], references: [id], onDelete: Cascade)
+
+  @@id([medicineId, distributorId])
+  @@map("medicine_offers")
+}

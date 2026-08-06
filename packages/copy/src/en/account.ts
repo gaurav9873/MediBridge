@@ -1,0 +1,240 @@
+import type { EmptyState, FieldHelp, PageHelp, PageMeta } from '../types.js'
+
+/**
+ * Profile, addresses, bank details, license renewal and notifications.
+ */
+
+export const account = {
+  page: {
+    title: 'My Account',
+    subtitle: 'Your business details, addresses and settings.',
+  } satisfies PageMeta,
+
+  tabs: {
+    profile: 'My Details',
+    business: 'Business',
+    license: 'Drug License',
+    addresses: 'Addresses',
+    bank: 'Bank Details',
+    notifications: 'Messages',
+    security: 'Password',
+  },
+
+  profile: {
+    fields: {
+      fullName: {
+        label: 'Your Full Name',
+        helperText: 'Enter your name as it appears on your official documents.',
+      } satisfies FieldHelp,
+      phone: {
+        label: 'Mobile Number',
+        helperText: 'We use this to sign you in and to send order updates.',
+        tooltip: 'To change your mobile number, please call us on 1800-000-0000.',
+      } satisfies FieldHelp,
+      email: {
+        label: 'Email Address',
+        helperText: 'We send your invoices and receipts here.',
+      } satisfies FieldHelp,
+    },
+    success: 'Your details have been saved.',
+  },
+
+  license: {
+    page: {
+      title: 'Drug License',
+      subtitle: 'Keep this up to date. You cannot order once it expires.',
+    } satisfies PageMeta,
+    currentHeading: 'Your current license',
+    validUntil: (date: string) => `Valid until ${date}`,
+    expiresInDays: (days: number) =>
+      days === 1
+        ? 'Your license expires tomorrow. Please upload a renewed one now.'
+        : `Your license expires in ${days} days. Please upload a renewed one soon.`,
+    expired: 'Your license has expired. You cannot place orders until you upload a renewed one.',
+    fields: {
+      licenseNumber: {
+        label: 'Drug License Number',
+        helperText: 'Enter the license number exactly as printed on your license.',
+      } satisfies FieldHelp,
+      expiryDate: {
+        label: 'License Valid Until',
+        helperText: 'Enter the expiry date printed on your renewed license.',
+      } satisfies FieldHelp,
+      file: {
+        label: 'Upload Drug License',
+        helperText: 'Upload a clear image or PDF of your valid drug license. Maximum size 5 MB.',
+      } satisfies FieldHelp,
+    },
+    submit: 'Submit for Verification',
+    success: 'License submitted for verification.',
+    pendingNote:
+      'Our team is checking your renewed license. You can keep ordering with your current one until then.',
+    help: {
+      whatIsThis:
+        'Your drug license lets you buy medicines legally. We check the expiry date before every order, so this needs to stay current.',
+      topics: [
+        {
+          question: 'What happens when my license expires?',
+          answer:
+            'You can still sign in and search, but you cannot place new orders until you upload a renewed license. Orders already placed are not affected.',
+        },
+        {
+          question: 'How early should I upload my renewal?',
+          answer:
+            'As soon as you have it. We start reminding you 30 days before expiry. Uploading early means no gap in your ordering.',
+        },
+      ],
+    } satisfies PageHelp,
+  },
+
+  addresses: {
+    page: {
+      title: 'My Addresses',
+      subtitle: 'Where we deliver your medicines.',
+    } satisfies PageMeta,
+    addCta: 'Add New Address',
+    setDefault: 'Use as Default',
+    defaultBadge: 'Default',
+    fields: {
+      label: {
+        label: 'Name This Address',
+        helperText: 'Give it a short name so you can spot it quickly.',
+        placeholder: 'e.g. Main Shop, Warehouse',
+      } satisfies FieldHelp,
+      line1: {
+        label: 'Address',
+        helperText: 'Enter the shop number, building and street.',
+        placeholder: 'Shop 12, Sai Complex, MG Road',
+      } satisfies FieldHelp,
+      city: {
+        label: 'City',
+        helperText: 'Enter your city or town.',
+      } satisfies FieldHelp,
+      state: {
+        label: 'State',
+        helperText: 'Choose your state.',
+      } satisfies FieldHelp,
+      pincode: {
+        label: 'PIN Code',
+        helperText: 'Enter the 6-digit PIN code of this address.',
+      } satisfies FieldHelp,
+      location: {
+        label: 'Exact Location',
+        helperText: 'Drag the pin to your exact shop location. This decides your delivery options.',
+        tooltip:
+          'The closer this pin is to your real shop, the more accurate your Same-Day Delivery options will be.',
+      } satisfies FieldHelp,
+      contactPhone: {
+        label: 'Contact Number for This Address',
+        helperText: 'The delivery person will call this number.',
+      } satisfies FieldHelp,
+    },
+    success: {
+      created: 'Address added.',
+      updated: 'Address updated.',
+      deleted: 'Address removed.',
+      defaultSet: 'Default address updated.',
+    },
+    empty: {
+      title: 'No addresses saved yet',
+      body: 'Add the address where you want your medicines delivered. You can save more than one.',
+      action: { label: 'Add Your First Address' },
+    } satisfies EmptyState,
+  },
+
+  bank: {
+    page: {
+      title: 'Bank Details',
+      subtitle: 'Where we send your weekly payout.',
+    } satisfies PageMeta,
+    fields: {
+      accountHolder: {
+        label: 'Account Holder Name',
+        helperText: 'Enter the name exactly as it appears on your bank account.',
+      } satisfies FieldHelp,
+      accountNumber: {
+        label: 'Account Number',
+        helperText: 'Enter your bank account number.',
+      } satisfies FieldHelp,
+      confirmAccountNumber: {
+        label: 'Confirm Account Number',
+        helperText: 'Type your account number again so we know it is correct.',
+      } satisfies FieldHelp,
+      ifsc: {
+        label: 'IFSC Code',
+        helperText: 'The 11-character code of your bank branch. It is on your cheque book.',
+        placeholder: 'HDFC0001234',
+      } satisfies FieldHelp,
+    },
+    success: 'Bank details saved. Your next payout will go to this account.',
+    warning:
+      'Please check these details carefully. Money sent to a wrong account cannot always be recovered.',
+    empty: {
+      title: 'No bank details added',
+      body: 'Add your bank account so we can send you the token payments we collect from retailers.',
+      action: { label: 'Add Bank Details' },
+    } satisfies EmptyState,
+  },
+
+  security: {
+    fields: {
+      currentPassword: {
+        label: 'Current Password',
+        helperText: 'Enter the password you use now.',
+      } satisfies FieldHelp,
+      newPassword: {
+        label: 'New Password',
+        helperText: 'Use at least 8 characters, with one letter and one number.',
+      } satisfies FieldHelp,
+      confirmPassword: {
+        label: 'Confirm New Password',
+        helperText: 'Type your new password again so we know it is correct.',
+      } satisfies FieldHelp,
+    },
+    submit: 'Change Password',
+    success: 'Your password has been changed.',
+    signOutOthers: 'Sign out of all other devices',
+    signOutOthersHelp: 'Use this if you think someone else has your password.',
+  },
+
+  notifications: {
+    page: {
+      title: 'Messages',
+      subtitle: 'Choose how you want us to keep you updated.',
+    } satisfies PageMeta,
+    channels: {
+      sms: 'Text message (SMS)',
+      email: 'Email',
+      whatsapp: 'WhatsApp',
+      inApp: 'In the app',
+    },
+    events: {
+      orderPlaced: 'When I place an order',
+      orderAccepted: 'When a distributor accepts my order',
+      orderDispatched: 'When my order is on the way',
+      orderDelivered: 'When my order is delivered',
+      paymentReceived: 'When a payment goes through',
+      paymentFailed: 'When a payment fails',
+      newOrder: 'When I receive a new order',
+      lowStock: 'When my stock is running low',
+      expiringSoon: 'When a batch is close to expiring',
+      licenseExpiring: 'When my drug license is close to expiring',
+      settlementPaid: 'When my payout is sent',
+    },
+    alwaysOnNote:
+      'Some messages, like payment receipts and license reminders, are always sent because you need them.',
+    success: 'Your message settings have been saved.',
+  },
+
+  inbox: {
+    page: {
+      title: 'Notifications',
+      subtitle: 'Everything we have told you recently.',
+    } satisfies PageMeta,
+    markAllRead: 'Mark All as Read',
+    empty: {
+      title: 'Nothing new',
+      body: 'Updates about your orders, payments and deliveries will show up here.',
+    } satisfies EmptyState,
+  },
+} as const

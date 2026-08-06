@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    // NodeNext resolution with no "type": "module" in package.json means these
+    // packages emit CommonJS — consumable by NestJS directly and by Next.js
+    // without transpilePackages — while still letting source use the
+    // ESM-correct `./foo.js` specifiers.
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    "noEmit": false,
+    "declaration": true,
+    "declarationMap": true
+  }
+}

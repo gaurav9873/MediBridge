@@ -1,0 +1,20 @@
+{
+  "name": "MediBridge B2B",
+  "short_name": "MediBridge",
+  "description": "Order medicines from trusted distributors.",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#ffffff",
+  "theme_color": "#0d7490",
+  "categories": ["business", "medical", "shopping"],
+  "lang": "en-IN",
+  "icons": [
+    {
+      "src": "/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

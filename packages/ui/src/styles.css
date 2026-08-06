@@ -1,0 +1,237 @@
+/*
+ * MediBridge design tokens.
+ *
+ * Imported by the web app's globals.css. Everything visual references a token
+ * from here — no component hardcodes a colour, radius or shadow.
+ *
+ * Accessibility rules baked into the values:
+ *   - Body text is 16px. Anything below that makes iOS Safari zoom on focus,
+ *     which feels broken on a phone.
+ *   - Every text/background pairing below meets WCAG AA (4.5:1) in both themes.
+ *   - --size-touch is 44px, the minimum comfortable tap target.
+ */
+
+@theme {
+  /* --- Brand: a calm medical teal. Trustworthy without being clinical. --- */
+  --color-brand-50: oklch(0.977 0.014 195);
+  --color-brand-100: oklch(0.947 0.03 195);
+  --color-brand-200: oklch(0.897 0.056 195);
+  --color-brand-300: oklch(0.828 0.084 195);
+  --color-brand-400: oklch(0.742 0.104 197);
+  --color-brand-500: oklch(0.665 0.106 199);
+  --color-brand-600: oklch(0.567 0.094 201);
+  --color-brand-700: oklch(0.478 0.078 203);
+  --color-brand-800: oklch(0.404 0.063 205);
+  --color-brand-900: oklch(0.352 0.051 207);
+  --color-brand-950: oklch(0.245 0.038 209);
+
+  /* --- Status. Always paired with an icon and a word, never colour alone. --- */
+  --color-success-50: oklch(0.972 0.033 156);
+  --color-success-100: oklch(0.94 0.062 156);
+  --color-success-500: oklch(0.68 0.15 156);
+  --color-success-600: oklch(0.594 0.132 157);
+  --color-success-700: oklch(0.5 0.11 158);
+  --color-success-900: oklch(0.32 0.07 159);
+
+  --color-warning-50: oklch(0.978 0.037 85);
+  --color-warning-100: oklch(0.948 0.076 85);
+  --color-warning-500: oklch(0.77 0.152 76);
+  --color-warning-600: oklch(0.678 0.145 66);
+  --color-warning-700: oklch(0.564 0.13 60);
+  --color-warning-900: oklch(0.372 0.09 55);
+
+  --color-danger-50: oklch(0.971 0.021 17);
+  --color-danger-100: oklch(0.936 0.041 17);
+  --color-danger-500: oklch(0.637 0.208 25);
+  --color-danger-600: oklch(0.571 0.199 27);
+  --color-danger-700: oklch(0.494 0.176 27);
+  --color-danger-900: oklch(0.352 0.125 26);
+
+  --color-info-50: oklch(0.97 0.019 245);
+  --color-info-100: oklch(0.932 0.038 245);
+  --color-info-500: oklch(0.623 0.157 254);
+  --color-info-600: oklch(0.546 0.171 258);
+  --color-info-700: oklch(0.488 0.155 258);
+  --color-info-900: oklch(0.35 0.11 259);
+
+  /* --- Type scale. Base is 16px on every device. --- */
+  --text-xs: 0.8125rem; /* 13px — captions, never body copy */
+  --text-sm: 0.875rem; /* 14px — secondary text */
+  --text-base: 1rem; /* 16px — body, and all form inputs */
+  --text-lg: 1.125rem;
+  --text-xl: 1.25rem;
+  --text-2xl: 1.5rem;
+  --text-3xl: 1.875rem;
+
+  /* --- Layout --- */
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+
+  /* Minimum comfortable tap target. Buttons and inputs never go below this. */
+  --size-touch: 2.75rem; /* 44px */
+  --size-touch-lg: 3rem; /* 48px — primary actions on mobile */
+
+  --shadow-card: 0 1px 2px 0 rgb(0 0 0 / 0.04), 0 1px 3px 0 rgb(0 0 0 / 0.06);
+  --shadow-raised: 0 4px 6px -1px rgb(0 0 0 / 0.07), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+  --shadow-overlay: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+
+  /* Mobile chrome heights, so content can pad itself clear of them. */
+  --height-bottom-nav: 4rem;
+  --height-app-bar: 3.5rem;
+}
+
+/*
+ * Semantic surface tokens.
+ *
+ * Components reference these (bg-surface, text-primary) rather than raw palette
+ * steps, which is what makes dark mode a token swap instead of a per-component
+ * `dark:` prefix on every element.
+ */
+@layer theme {
+  :root {
+    --color-surface: oklch(1 0 0);
+    --color-surface-raised: oklch(1 0 0);
+    --color-surface-sunken: oklch(0.976 0.002 240);
+    --color-surface-hover: oklch(0.968 0.003 240);
+
+    --color-content-primary: oklch(0.21 0.012 250);
+    --color-content-secondary: oklch(0.44 0.012 250);
+    --color-content-muted: oklch(0.58 0.011 250);
+    --color-content-inverse: oklch(1 0 0);
+
+    --color-border-default: oklch(0.898 0.005 250);
+    --color-border-strong: oklch(0.82 0.008 250);
+    --color-border-focus: var(--color-brand-600);
+  }
+
+  .dark {
+    --color-surface: oklch(0.216 0.008 250);
+    --color-surface-raised: oklch(0.262 0.009 250);
+    --color-surface-sunken: oklch(0.178 0.007 250);
+    --color-surface-hover: oklch(0.298 0.01 250);
+
+    --color-content-primary: oklch(0.968 0.003 250);
+    --color-content-secondary: oklch(0.79 0.008 250);
+    --color-content-muted: oklch(0.652 0.01 250);
+    --color-content-inverse: oklch(0.19 0.01 250);
+
+    --color-border-default: oklch(0.338 0.01 250);
+    --color-border-strong: oklch(0.43 0.012 250);
+    --color-border-focus: var(--color-brand-400);
+
+    /*
+     * Status and brand ramps need inverting too, not just the surfaces.
+     *
+     * The tinted-panel components (Alert, StatusBadge, the DataView error, the
+     * sidebar's active item) pair a `-50` background with `-900` text. Left at
+     * their light values in dark mode, those become bright cream and pale green
+     * blocks glaring out of a dark page. So here the 50/100 steps become dark
+     * tints of the same hue and the 900 step becomes the light text on top —
+     * the pairing stays legible and the components need no `dark:` variants.
+     */
+    --color-brand-50: oklch(0.281 0.038 203);
+    --color-brand-100: oklch(0.348 0.05 202);
+    --color-brand-700: oklch(0.855 0.075 197);
+    --color-brand-900: oklch(0.925 0.045 196);
+
+    --color-success-50: oklch(0.276 0.048 157);
+    --color-success-100: oklch(0.352 0.065 157);
+    --color-success-600: oklch(0.72 0.15 156);
+    --color-success-900: oklch(0.906 0.06 156);
+
+    --color-warning-50: oklch(0.283 0.05 70);
+    --color-warning-100: oklch(0.358 0.068 68);
+    --color-warning-600: oklch(0.79 0.145 76);
+    --color-warning-900: oklch(0.913 0.06 85);
+
+    --color-danger-50: oklch(0.278 0.06 25);
+    --color-danger-100: oklch(0.352 0.08 25);
+    --color-danger-600: oklch(0.68 0.19 25);
+    --color-danger-900: oklch(0.902 0.05 22);
+
+    --color-info-50: oklch(0.281 0.052 254);
+    --color-info-100: oklch(0.355 0.07 254);
+    --color-info-600: oklch(0.72 0.145 252);
+    --color-info-900: oklch(0.905 0.05 250);
+  }
+}
+
+@theme inline {
+  --color-surface: var(--color-surface);
+  --color-surface-raised: var(--color-surface-raised);
+  --color-surface-sunken: var(--color-surface-sunken);
+  --color-surface-hover: var(--color-surface-hover);
+  --color-content-primary: var(--color-content-primary);
+  --color-content-secondary: var(--color-content-secondary);
+  --color-content-muted: var(--color-content-muted);
+  --color-content-inverse: var(--color-content-inverse);
+  --color-border-default: var(--color-border-default);
+  --color-border-strong: var(--color-border-strong);
+  --color-border-focus: var(--color-border-focus);
+}
+
+@layer base {
+  html {
+    /* Stops iOS auto-inflating text in landscape. */
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--color-surface-sunken);
+    color: var(--color-content-primary);
+    font-size: var(--text-base);
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    /* Respect the notch and the home indicator on iPhones. */
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+
+  /*
+   * A single, always-visible focus ring. Keyboard users need to see where they
+   * are; :focus-visible keeps it from firing on mouse clicks.
+   */
+  *:focus-visible {
+    outline: 2px solid var(--color-border-focus);
+    outline-offset: 2px;
+    border-radius: var(--radius-sm);
+  }
+
+  /* Never let a form control fall below 16px — iOS zooms in if it does. */
+  input,
+  select,
+  textarea {
+    font-size: max(var(--text-base), 1rem);
+  }
+
+  /* Honour the OS "reduce motion" setting. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer utilities {
+  /* Content that must clear the mobile bottom navigation. */
+  .pb-safe-nav {
+    padding-bottom: calc(var(--height-bottom-nav) + env(safe-area-inset-bottom) + 1rem);
+  }
+
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  /* Wide content scrolls inside itself; the page body never scrolls sideways. */
+  .scroll-x {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}

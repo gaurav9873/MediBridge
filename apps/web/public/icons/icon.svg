@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="MediBridge">
+  <rect width="512" height="512" rx="112" fill="#0d7490"/>
+  <!-- A bridge over a medical cross: the two halves of the name. -->
+  <g fill="none" stroke="#ffffff" stroke-width="26" stroke-linecap="round">
+    <path d="M96 300c0-62 50-112 112-112h96c62 0 112 50 112 112"/>
+    <path d="M96 300v76M416 300v76M208 300v76M304 300v76"/>
+  </g>
+  <path d="M238 108h36v44h44v36h-44v44h-36v-44h-44v-36h44z" fill="#ffffff"/>
+</svg>

@@ -1,0 +1,12 @@
+@import 'tailwindcss';
+@import '@medibridge/ui/styles.css';
+
+/*
+ * Tailwind v4 scans for class names automatically, but @medibridge/ui lives
+ * outside this app's directory — @source tells it to look there too.
+ */
+@source '../../../../packages/ui/src';
+
+/* Dark mode follows the `dark` class, set by ThemeScript from the OS setting
+   or the user's saved choice. */
+@custom-variant dark (&:where(.dark, .dark *));

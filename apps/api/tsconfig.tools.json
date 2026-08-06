@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "extends": "../../packages/config/tsconfig.base.json",
+  "compilerOptions": {
+    // The seed script and prisma.config.ts are run by tsx and the Prisma CLI,
+    // not compiled into the Nest bundle. They are ESM, so they get NodeNext
+    // here rather than the CommonJS the application build uses.
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "noEmit": true,
+    "noUncheckedIndexedAccess": false
+  },
+  "include": ["prisma/**/*", "prisma.config.ts"]
+}
