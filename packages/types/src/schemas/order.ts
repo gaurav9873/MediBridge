@@ -121,9 +121,9 @@ export interface CheckoutResult {
   gatewayOrderId: string
 }
 
-/** Same-Day availability, computed per distributor from the PostGIS distance. */
+/** Same-Day availability, computed per warehouse from the PostGIS distance. */
 export interface DeliveryAvailability {
-  distributorId: string
+  warehouseId: string
   distanceKm: number
   radiusKm: number
   sameDayAvailable: boolean

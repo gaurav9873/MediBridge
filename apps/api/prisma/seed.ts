@@ -89,28 +89,78 @@ async function seedCompany(): Promise<void> {
     },
   })
 
-  // Every company gets the same seven fixed roles, as bundles of permission
-  // keys. Custom roles later are rows in the same table with isSystem = false,
-  // so nothing here or in the guards changes.
   for (const company of [company_, second]) {
-    for (const [key, permissions] of Object.entries(SYSTEM_ROLE_PERMISSIONS)) {
-      const role = await prisma.role.create({
-        data: {
-          companyId: company.id,
-          key,
-          name: SYSTEM_ROLE_LABELS[key as keyof typeof SYSTEM_ROLE_LABELS],
-          isSystem: true,
-        },
-      })
-      await prisma.rolePermission.createMany({
-        data: permissions.map((permission) => ({ roleId: role.id, permission })),
-      })
-    }
+    await seedSystemRoles(company.id)
   }
   console.log(`  ${Object.keys(SYSTEM_ROLE_PERMISSIONS).length} system roles seeded per company`)
 
   console.log('  MediBridge          MARKETPLACE, 20% token')
   console.log('  HealthPlus          PRIVATE_DISTRIBUTOR, 15-day credit')
+}
+
+/**
+ * Every company gets the same seven fixed roles, as bundles of permission keys.
+ * Custom roles later are rows in the same table with isSystem = false, so
+ * nothing here or in the guards changes.
+ */
+async function seedSystemRoles(companyId: string): Promise<void> {
+  for (const [key, permissions] of Object.entries(SYSTEM_ROLE_PERMISSIONS)) {
+    const role = await prisma.role.create({
+      data: {
+        companyId,
+        key,
+        name: SYSTEM_ROLE_LABELS[key as keyof typeof SYSTEM_ROLE_LABELS],
+        isSystem: true,
+      },
+    })
+    await prisma.rolePermission.createMany({
+      data: permissions.map((permission) => ({ roleId: role.id, permission })),
+    })
+  }
+}
+
+/**
+ * A seller on the marketplace.
+ *
+ * A distributor is a tenant in its own right, not a row inside the
+ * marketplace's tenant: its staff, stock and settlements are its own, and
+ * Row-Level Security keeps one seller out of another's data. What ties it to
+ * the marketplace is a CompanyLink, not shared ownership.
+ */
+async function createSeller(params: {
+  name: string
+  slug: string
+  gstNumber: string
+  drugLicenseNumber: string
+  licenseExpiresOn: Date
+  bankAccountHolder: string
+  bankAccountNumber: string
+  bankIfsc: string
+}): Promise<string> {
+  const company = await prisma.company.create({
+    data: {
+      name: params.name,
+      slug: params.slug,
+      status: 'ACTIVE',
+      businessMode: 'MARKETPLACE',
+      paymentTermType: 'TOKEN_PLUS_COD',
+      tokenPercent: 20,
+      gstNumber: params.gstNumber,
+      drugLicenseNumber: params.drugLicenseNumber,
+      licenseExpiresOn: params.licenseExpiresOn,
+      bankAccountHolder: params.bankAccountHolder,
+      bankAccountNumber: params.bankAccountNumber,
+      bankIfsc: params.bankIfsc,
+    },
+  })
+
+  await seedSystemRoles(company.id)
+
+  await prisma.companyLink.create({
+    data: { marketplaceId: COMPANY_ID, sellerId: company.id, isActive: true },
+  })
+
+  return company.id
 }
 
 async function clearAll(): Promise<void> {
@@ -127,7 +177,7 @@ async function clearAll(): Promise<void> {
       "medicine_requests", "medicines",
       "notification_preferences", "notifications", "audit_logs",
       "refresh_tokens", "documents",
-      "distributor_profiles", "retailer_profiles", "addresses", "users",
+      "addresses", "users",
       "settings"
     RESTART IDENTITY CASCADE
   `)
@@ -213,16 +263,19 @@ async function createUserWithAddress(params: {
   phone: string
   email: string
   address?: SeedAddress
+  /** Which tenant this person belongs to. Sellers' staff belong to the seller. */
+  companyId?: string
 }): Promise<{ userId: string; addressId?: string }> {
   const passwordHash = await argon2.hash(DEV_PASSWORD)
   const now = new Date()
+  const companyId = params.companyId ?? COMPANY_ID
 
   const user = await prisma.user.create({
     data: {
       phone: params.phone,
       email: params.email,
       passwordHash,
-      companyId: COMPANY_ID,
+      companyId,
       fullName: params.fullName,
       role: params.role,
       accountStatus: 'ACTIVE',
@@ -244,7 +297,7 @@ async function createUserWithAddress(params: {
 
   // Company Admin by default, so seeded staff can actually do something.
   const adminRole = await prisma.role.findFirst({
-    where: { companyId: COMPANY_ID, key: 'COMPANY_ADMIN' },
+    where: { companyId, key: 'COMPANY_ADMIN' },
   })
   if (adminRole) {
     await prisma.userRoleAssignment.create({
@@ -257,7 +310,7 @@ async function createUserWithAddress(params: {
   const address = await prisma.address.create({
     data: {
       userId: user.id,
-      companyId: COMPANY_ID,
+      companyId,
       label: params.address.label,
       line1: params.address.line1,
       city: params.address.city,
@@ -280,13 +333,16 @@ async function approveDocuments(params: {
   licenseNumber: string
   gstNumber: string
   expiresOn: Date
+  /** Documents belong to the same tenant as the person who uploaded them. */
+  companyId?: string
 }): Promise<void> {
   const now = new Date()
+  const companyId = params.companyId ?? COMPANY_ID
   await prisma.document.createMany({
     data: [
       {
         userId: params.userId,
-        companyId: COMPANY_ID,
+        companyId,
         type: 'DRUG_LICENSE',
         number: params.licenseNumber,
         expiresOn: params.expiresOn,
@@ -300,7 +356,7 @@ async function approveDocuments(params: {
       },
       {
         userId: params.userId,
-        companyId: COMPANY_ID,
+        companyId,
         type: 'GST_CERTIFICATE',
         number: params.gstNumber,
         fileKey: `seed/gst/${params.userId}.pdf`,
@@ -337,12 +393,25 @@ async function main(): Promise<void> {
   })
   console.log('  Admin        admin@medibridge.in / 9000000001')
 
-  // --- Distributors ------------------------------------------------------
+  // --- Sellers -----------------------------------------------------------
+  // Each distributor is its own tenant, linked to the marketplace. Its staff,
+  // stock and payouts belong to it, not to MediBridge.
+  const medplusCompanyId = await createSeller({
+    name: 'MedPlus Wholesale Pvt Ltd',
+    slug: 'medplus-wholesale',
+    gstNumber: '27AAPFU0939F1ZV',
+    drugLicenseNumber: 'MH-PUN-20B-104521',
+    licenseExpiresOn: monthsFromNow(30),
+    bankAccountHolder: 'MedPlus Wholesale Pvt Ltd',
+    bankAccountNumber: '50100234567890',
+    bankIfsc: 'HDFC0000123',
+  })
   const medplus = await createUserWithAddress({
     role: 'DISTRIBUTOR',
     fullName: 'Anil Deshmukh',
     phone: '9000000010',
     email: 'anil@medpluswholesale.in',
+    companyId: medplusCompanyId,
     address: {
       label: 'Hadapsar Warehouse',
       line1: 'Unit 4, Fortune Industrial Estate, Hadapsar',
@@ -359,31 +428,38 @@ async function main(): Promise<void> {
     licenseNumber: 'MH-PUN-20B-104521',
     gstNumber: '27AAPFU0939F1ZV',
     expiresOn: monthsFromNow(30),
+    companyId: medplusCompanyId,
   })
-  const medplusProfile = await prisma.distributorProfile.create({
+  const medplusWarehouse = await prisma.warehouse.create({
     data: {
-      userId: medplus.userId,
-      businessName: 'MedPlus Wholesale Pvt Ltd',
-      gstNumber: '27AAPFU0939F1ZV',
-      drugLicenseNumber: 'MH-PUN-20B-104521',
-      licenseExpiresOn: monthsFromNow(30),
-      hubAddressId: medplus.addressId,
+      companyId: medplusCompanyId,
+      name: 'Hadapsar Warehouse',
+      addressId: medplus.addressId!,
       sameDayRadiusKm: 25,
       sameDayCutoffTime: '14:00',
       deliveryChargePaise: rs(50),
       freeDeliveryAbovePaise: rs(5000),
-      bankAccountHolder: 'MedPlus Wholesale Pvt Ltd',
-      bankAccountNumber: '50100234567890',
-      bankIfsc: 'HDFC0000123',
+      isDefault: true,
     },
   })
   console.log('  Distributor  anil@medpluswholesale.in / 9000000010  (Pune, 25km radius)')
 
+  const wellnessCompanyId = await createSeller({
+    name: 'Wellness Distributors LLP',
+    slug: 'wellness-distributors',
+    gstNumber: '27AACCW1234M1Z8',
+    drugLicenseNumber: 'MH-MUM-21B-778120',
+    licenseExpiresOn: monthsFromNow(18),
+    bankAccountHolder: 'Wellness Distributors LLP',
+    bankAccountNumber: '00112233445566',
+    bankIfsc: 'ICIC0000456',
+  })
   const wellness = await createUserWithAddress({
     role: 'DISTRIBUTOR',
     fullName: 'Farida Shaikh',
     phone: '9000000011',
     email: 'farida@wellnessdistributors.in',
+    companyId: wellnessCompanyId,
     address: {
       label: 'Andheri Depot',
       line1: 'Godown 7, Marol MIDC, Andheri East',
@@ -400,22 +476,18 @@ async function main(): Promise<void> {
     licenseNumber: 'MH-MUM-21B-778120',
     gstNumber: '27AACCW1234M1Z8',
     expiresOn: monthsFromNow(18),
+    companyId: wellnessCompanyId,
   })
-  const wellnessProfile = await prisma.distributorProfile.create({
+  const wellnessWarehouse = await prisma.warehouse.create({
     data: {
-      userId: wellness.userId,
-      businessName: 'Wellness Distributors LLP',
-      gstNumber: '27AACCW1234M1Z8',
-      drugLicenseNumber: 'MH-MUM-21B-778120',
-      licenseExpiresOn: monthsFromNow(18),
-      hubAddressId: wellness.addressId,
+      companyId: wellnessCompanyId,
+      name: 'Andheri Depot',
+      addressId: wellness.addressId!,
       // Deliberately smaller than MedPlus, so the two behave differently.
       sameDayRadiusKm: 15,
       sameDayCutoffTime: '12:00',
       deliveryChargePaise: 0,
-      bankAccountHolder: 'Wellness Distributors LLP',
-      bankAccountNumber: '00112233445566',
-      bankIfsc: 'ICIC0000456',
+      isDefault: true,
     },
   })
   console.log('  Distributor  farida@wellnessdistributors.in / 9000000011  (Mumbai, 15km radius)')
@@ -443,8 +515,9 @@ async function main(): Promise<void> {
     gstNumber: '27AADCS9876P1ZQ',
     expiresOn: monthsFromNow(14),
   })
-  await prisma.retailerProfile.create({
+  await prisma.customer.create({
     data: {
+      companyId: COMPANY_ID,
       userId: sharma.userId,
       businessName: 'Sharma Medical Store',
       gstNumber: '27AADCS9876P1ZQ',
@@ -476,8 +549,9 @@ async function main(): Promise<void> {
     gstNumber: '27AAECK5432R1ZM',
     expiresOn: monthsFromNow(8),
   })
-  await prisma.retailerProfile.create({
+  await prisma.customer.create({
     data: {
+      companyId: COMPANY_ID,
       userId: kumar.userId,
       businessName: 'Kumar Pharmacy',
       gstNumber: '27AAECK5432R1ZM',
@@ -537,8 +611,9 @@ async function main(): Promise<void> {
       },
     ],
   })
-  await prisma.retailerProfile.create({
+  await prisma.customer.create({
     data: {
+      companyId: COMPANY_ID,
       userId: pending.userId,
       businessName: 'New Life Chemists',
       gstNumber: '27AAFCN1122L1ZP',
@@ -983,7 +1058,13 @@ async function main(): Promise<void> {
     },
   ]
 
-  async function insertStock(distributorId: string, rows: StockRow[], label: string) {
+  // Stock belongs to the seller's tenant, not the marketplace's: the warehouse
+  // decides both where it sits and who may read it.
+  async function insertStock(
+    warehouse: { id: string; companyId: string },
+    rows: StockRow[],
+    label: string,
+  ) {
     let inserted = 0
     for (const row of rows) {
       const medicine = medicineIds.get(row.medicine)
@@ -996,8 +1077,8 @@ async function main(): Promise<void> {
 
       await prisma.inventoryItem.create({
         data: {
-          distributorId,
-          companyId: COMPANY_ID,
+          warehouseId: warehouse.id,
+          companyId: warehouse.companyId,
           medicineId: medicine.id,
           batchNumber: row.batch,
           expiryDate: monthsFromNow(row.expiryMonths),
@@ -1014,8 +1095,8 @@ async function main(): Promise<void> {
     console.log(`  ${inserted} batches — ${label}`)
   }
 
-  await insertStock(medplusProfile.id, medplusStock, 'MedPlus Wholesale (Pune)')
-  await insertStock(wellnessProfile.id, wellnessStock, 'Wellness Distributors (Mumbai)')
+  await insertStock(medplusWarehouse, medplusStock, 'MedPlus Wholesale (Pune)')
+  await insertStock(wellnessWarehouse, wellnessStock, 'Wellness Distributors (Mumbai)')
 
   // --- Sanity check ------------------------------------------------------
   //
@@ -1027,13 +1108,13 @@ async function main(): Promise<void> {
   >(`
     SELECT
       r.label AS retailer,
-      d.label AS distributor,
+      w.name  AS distributor,
       ROUND((ST_Distance(r.location, d.location) / 1000)::numeric, 1)::float8 AS distance_km,
-      ST_DWithin(r.location, d.location, dp."sameDayRadiusKm" * 1000) AS same_day
+      ST_DWithin(r.location, d.location, w."sameDayRadiusKm" * 1000) AS same_day
     FROM "addresses" r
     JOIN "users" ru ON ru.id = r."userId" AND ru.role = 'RETAILER'
-    CROSS JOIN "addresses" d
-    JOIN "distributor_profiles" dp ON dp."hubAddressId" = d.id
+    CROSS JOIN "warehouses" w
+    JOIN "addresses" d ON d.id = w."addressId"
     WHERE ru."accountStatus" = 'ACTIVE'
     ORDER BY r.label, distance_km
   `)

@@ -55,7 +55,7 @@ export class AuthService {
 
     const user = await this.prisma.user.findFirst({
       where: { id: identity.userId, deletedAt: null },
-      include: { retailerProfile: true, distributorProfile: true },
+      include: { customerProfile: true, companyRef: true },
     })
     if (!user) throw new AppException(ApiErrorCode.INVALID_CREDENTIALS)
 
@@ -117,7 +117,7 @@ export class AuthService {
   async findSessionUser(userId: string): Promise<SessionUser | null> {
     const user = await this.prisma.user.findFirst({
       where: { id: userId, deletedAt: null },
-      include: { retailerProfile: true, distributorProfile: true },
+      include: { customerProfile: true, companyRef: true },
     })
     if (!user) return null
     if (user.accountStatus === 'SUSPENDED') return null
@@ -130,6 +130,11 @@ export class AuthService {
    * `canPlaceOrders` is computed here rather than in the UI so the rule lives
    * in exactly one place: the account must be active AND hold a licence that
    * has not expired. Admins are never order-placers.
+   *
+   * Buyers and sellers no longer share a shape. A buyer is a Customer of some
+   * company; a seller's staff belong to the selling Company itself. Both carry
+   * a trading name and a licence expiry, so the session looks the same either
+   * way — but they are read from different places.
    */
   private toSessionUser(user: {
     id: string
@@ -139,11 +144,12 @@ export class AuthService {
     email: string
     role: string
     accountStatus: string
-    retailerProfile: { businessName: string; licenseExpiresOn: Date | null } | null
-    distributorProfile: { businessName: string; licenseExpiresOn: Date | null } | null
+    customerProfile: { businessName: string; licenseExpiresOn: Date | null } | null
+    companyRef: { name: string; licenseExpiresOn: Date | null } | null
   }): SessionUser {
-    const profile = user.retailerProfile ?? user.distributorProfile
-    const licenseExpiresOn = profile?.licenseExpiresOn ?? null
+    const businessName = user.customerProfile?.businessName ?? user.companyRef?.name ?? null
+    const licenseExpiresOn =
+      user.customerProfile?.licenseExpiresOn ?? user.companyRef?.licenseExpiresOn ?? null
 
     const licenceValid = licenseExpiresOn !== null && licenseExpiresOn.getTime() > Date.now()
 
@@ -160,7 +166,7 @@ export class AuthService {
       email: user.email,
       role: user.role as UserRole,
       accountStatus: user.accountStatus,
-      businessName: profile?.businessName ?? null,
+      businessName,
       canPlaceOrders,
       licenseExpiresOn: licenseExpiresOn ? licenseExpiresOn.toISOString().slice(0, 10) : null,
     }

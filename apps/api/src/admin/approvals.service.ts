@@ -29,8 +29,8 @@ export class ApprovalsService {
           deletedAt: null,
         },
         include: {
-          retailerProfile: true,
-          distributorProfile: true,
+          customerProfile: true,
+          companyRef: true,
           documents: { orderBy: { type: 'asc' } },
           addresses: { where: { deletedAt: null }, orderBy: { isDefault: 'desc' }, take: 1 },
         },
@@ -40,7 +40,10 @@ export class ApprovalsService {
     )
 
     return users.map((user) => {
-      const profile = user.retailerProfile ?? user.distributorProfile
+      // A buyer applies as a Customer; a seller's staff apply on behalf of the
+      // selling Company. Both carry a trading name and a GST number.
+      const profile = user.customerProfile ?? user.companyRef
+      const businessName = user.customerProfile?.businessName ?? user.companyRef?.name ?? null
       const address = user.addresses[0]
 
       return {
@@ -49,7 +52,7 @@ export class ApprovalsService {
         phone: user.phone,
         email: user.email,
         role: user.role as 'RETAILER' | 'DISTRIBUTOR',
-        businessName: profile?.businessName ?? null,
+        businessName,
         gstNumber: profile?.gstNumber ?? null,
         city: address?.city ?? null,
         state: address?.state ?? null,
@@ -81,7 +84,7 @@ export class ApprovalsService {
     return this.db.runAsPlatform('approve application', async (tx) => {
       const user = await tx.user.findFirst({
         where: { id: userId, deletedAt: null },
-        include: { documents: true, retailerProfile: true, distributorProfile: true },
+        include: { documents: true, customerProfile: true, companyRef: true },
       })
 
       if (!user) throw new AppException(ApiErrorCode.NOT_FOUND)
@@ -126,16 +129,17 @@ export class ApprovalsService {
           },
         })
 
-        const profileData = {
+        // Denormalise the approved licence onto whichever record the ordering
+        // guard reads: the Customer for a buyer, the Company for a seller.
+        const licenceData = {
           drugLicenseNumber: licence.number,
           licenseExpiresOn: licence.expiresOn,
         }
 
-        if (user.retailerProfile) {
-          await tx.retailerProfile.update({ where: { userId }, data: profileData })
-        }
-        if (user.distributorProfile) {
-          await tx.distributorProfile.update({ where: { userId }, data: profileData })
+        if (user.customerProfile) {
+          await tx.customer.update({ where: { userId }, data: licenceData })
+        } else if (user.companyId) {
+          await tx.company.update({ where: { id: user.companyId }, data: licenceData })
         }
 
         await tx.user.update({

@@ -157,8 +157,8 @@ export class AdminListsController {
           skip: (query.page - 1) * query.pageSize,
           take: query.pageSize,
           include: {
-            retailerProfile: true,
-            distributorProfile: true,
+            customerProfile: true,
+            companyRef: true,
             addresses: { where: { deletedAt: null }, take: 1, orderBy: { isDefault: 'desc' } },
           },
         }),
@@ -168,17 +168,21 @@ export class AdminListsController {
 
     return {
       items: items.map((user) => {
-        const profile = user.retailerProfile ?? user.distributorProfile
+        // Buyers trade under a Customer name; a seller's staff under the
+        // selling company's own name.
         return {
           id: user.id,
           fullName: user.fullName,
-          businessName: profile?.businessName ?? null,
+          businessName: user.customerProfile?.businessName ?? user.companyRef?.name ?? null,
           role: user.role,
           phone: user.phone,
           email: user.email,
           city: user.addresses[0]?.city ?? null,
           accountStatus: user.accountStatus,
-          licenseExpiresOn: profile?.licenseExpiresOn?.toISOString().slice(0, 10) ?? null,
+          licenseExpiresOn:
+            (user.customerProfile?.licenseExpiresOn ?? user.companyRef?.licenseExpiresOn)
+              ?.toISOString()
+              .slice(0, 10) ?? null,
           createdAt: user.createdAt.toISOString(),
         }
       }),
@@ -203,9 +207,10 @@ export class AdminListsController {
           take: query.pageSize,
           include: {
             retailer: {
-              select: { fullName: true, retailerProfile: { select: { businessName: true } } },
+              select: { fullName: true, customerProfile: { select: { businessName: true } } },
             },
-            distributor: { select: { businessName: true } },
+            // The seller is the company; the warehouse only says where from.
+            warehouse: { select: { name: true, company: { select: { name: true } } } },
           },
         }),
         tx.order.count(),
@@ -216,8 +221,8 @@ export class AdminListsController {
       items: items.map((order) => ({
         id: order.id,
         orderNumber: order.orderNumber,
-        retailerName: order.retailer.retailerProfile?.businessName ?? order.retailer.fullName,
-        distributorName: order.distributor.businessName,
+        retailerName: order.retailer.customerProfile?.businessName ?? order.retailer.fullName,
+        distributorName: order.warehouse.company.name,
         status: order.status,
         deliveryMode: order.deliveryMode,
         totalPaise: order.totalPaise,

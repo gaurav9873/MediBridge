@@ -455,7 +455,7 @@ export class BulkProcessor {
     return {
       userId: user.id,
       role: user.role,
-      distributorId: job.scopeId ?? undefined,
+      warehouseId: job.scopeId ?? undefined,
     }
   }
 

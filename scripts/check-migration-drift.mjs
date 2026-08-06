@@ -45,11 +45,11 @@ const PROTECTED_INDEXES = [
   'medicines_composition_trgm_idx',
   'inventory_items_sellable_idx',
   'stock_reservations_live_idx',
-  'medicine_offers_distributor_price_idx',
+  'medicine_offers_warehouse_price_idx',
   'medicine_offers_search_idx',
   'medicine_offers_name_trgm_idx',
   'medicine_offers_medicine_price_idx',
-  'medicine_offers_distributor_expiry_idx',
+  'medicine_offers_warehouse_expiry_idx',
 ]
 
 /** GENERATED columns. Prisma tries to strip their expression. */
@@ -64,11 +64,11 @@ CREATE INDEX IF NOT EXISTS "addresses_location_gist_idx" ON "addresses" USING GI
 CREATE INDEX IF NOT EXISTS "medicines_search_vector_gin_idx" ON "medicines" USING GIN ("searchVector");
 CREATE INDEX IF NOT EXISTS "medicines_name_trgm_idx" ON "medicines" USING GIN ("name" gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS "medicines_composition_trgm_idx" ON "medicines" USING GIN ("composition" gin_trgm_ops);
-CREATE INDEX IF NOT EXISTS "medicine_offers_distributor_price_idx" ON "medicine_offers" ("distributorId", "bestPricePaise");
+CREATE INDEX IF NOT EXISTS "medicine_offers_warehouse_price_idx" ON "medicine_offers" ("warehouseId", "bestPricePaise");
 CREATE INDEX IF NOT EXISTS "medicine_offers_search_idx" ON "medicine_offers" USING GIN ("searchVector");
 CREATE INDEX IF NOT EXISTS "medicine_offers_name_trgm_idx" ON "medicine_offers" USING GIN ("name" gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS "medicine_offers_medicine_price_idx" ON "medicine_offers" ("medicineId", "bestPricePaise");
-CREATE INDEX IF NOT EXISTS "medicine_offers_distributor_expiry_idx" ON "medicine_offers" ("distributorId", "latestExpiry" DESC);
+CREATE INDEX IF NOT EXISTS "medicine_offers_warehouse_expiry_idx" ON "medicine_offers" ("warehouseId", "latestExpiry" DESC);
 `
 
 /**

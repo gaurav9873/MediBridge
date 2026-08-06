@@ -227,8 +227,6 @@ model User {
   /// Soft delete — orders and invoices must survive an account closure.
   deletedAt DateTime?
 
-  retailerProfile    RetailerProfile?
-  distributorProfile DistributorProfile?
   addresses          Address[]
   documents          Document[]
   refreshTokens      RefreshToken[]
@@ -255,68 +253,6 @@ model User {
   @@index([role, accountStatus])
   @@index([deletedAt])
   @@map("users")
-}
-
-model RetailerProfile {
-  id           String @id @default(uuid()) @db.Uuid
-  userId       String @unique @db.Uuid
-  businessName String @db.VarChar(160)
-  gstNumber    String @unique @db.VarChar(15)
-
-  /// Denormalised from the approved DRUG_LICENSE document so the ordering
-  /// guard is a single cheap read instead of a join on every checkout.
-  drugLicenseNumber String?   @db.VarChar(60)
-  licenseExpiresOn  DateTime? @db.Date
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([licenseExpiresOn])
-  @@map("retailer_profiles")
-}
-
-model DistributorProfile {
-  id           String @id @default(uuid()) @db.Uuid
-  userId       String @unique @db.Uuid
-  businessName String @db.VarChar(160)
-  gstNumber    String @unique @db.VarChar(15)
-
-  drugLicenseNumber String?   @db.VarChar(60)
-  licenseExpiresOn  DateTime? @db.Date
-
-  /// The warehouse this distributor ships from. Its lat/lng is one half of
-  /// every Same-Day radius calculation.
-  hubAddressId String?  @unique @db.Uuid
-  hubAddress   Address? @relation("DistributorHub", fields: [hubAddressId], references: [id])
-
-  /// Retailers inside this many km may choose Same-Day Delivery.
-  sameDayRadiusKm        Int     @default(25)
-  /// Orders placed after this local time roll to Next-Day. Stored "HH:MM".
-  sameDayCutoffTime      String  @default("14:00") @db.VarChar(5)
-  deliveryChargePaise    Int     @default(0)
-  freeDeliveryAbovePaise Int?
-  /// Distributor's own kill switch — hides all their stock without deleting it.
-  isAcceptingOrders      Boolean @default(true)
-
-  // Weekly settlement destination.
-  bankAccountHolder String? @db.VarChar(160)
-  bankAccountNumber String? @db.VarChar(34)
-  bankIfsc          String? @db.VarChar(11)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  inventoryItems InventoryItem[]
-  orders         Order[]         @relation("DistributorOrders")
-  settlements    Settlement[]
-  offers         MedicineOffer[]
-
-  @@index([isAcceptingOrders])
-  @@index([licenseExpiresOn])
-  @@map("distributor_profiles")
 }
 
 /// Uploaded drug licences and GST certificates, plus their approval trail.
@@ -387,7 +323,6 @@ model Address {
   deletedAt DateTime?
 
   user          User                @relation(fields: [userId], references: [id], onDelete: Cascade)
-  distributorOf DistributorProfile? @relation("DistributorHub")
   orderGroups   OrderGroup[]
   orders        Order[]
   warehouses    Warehouse[]
@@ -516,9 +451,9 @@ model InventoryItem {
   /// Tenant this row belongs to. Enforced by Row-Level Security.
   companyId     String  @db.Uuid
   companyRef    Company @relation("InventoryItemCompany", fields: [companyId], references: [id])
-  id            String  @id @default(uuid()) @db.Uuid
-  distributorId String  @db.Uuid
-  medicineId    String  @db.Uuid
+  id          String  @id @default(uuid()) @db.Uuid
+  warehouseId String  @db.Uuid
+  medicineId  String  @db.Uuid
 
   batchNumber String   @db.VarChar(60)
   expiryDate  DateTime @db.Date
@@ -541,16 +476,16 @@ model InventoryItem {
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
-  distributor  DistributorProfile @relation(fields: [distributorId], references: [id], onDelete: Cascade)
+  warehouse    Warehouse          @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
   medicine     Medicine           @relation(fields: [medicineId], references: [id])
   cartItems    CartItem[]
   orderItems   OrderItem[]
   reservations StockReservation[]
 
-  @@unique([distributorId, medicineId, batchNumber])
+  @@unique([warehouseId, medicineId, batchNumber])
   /// Covers the hot search path: live stock for a medicine, oldest expiry first.
   @@index([medicineId, isActive, expiryDate])
-  @@index([distributorId, isActive])
+  @@index([warehouseId, isActive])
   @@index([expiryDate])
   @@map("inventory_items")
 }
@@ -677,9 +612,9 @@ model Order {
   orderNumber  String  @unique @db.VarChar(24)
   orderGroupId String  @db.Uuid
 
-  retailerId    String @db.Uuid
-  distributorId String @db.Uuid
-  addressId     String @db.Uuid
+  retailerId  String @db.Uuid
+  warehouseId String @db.Uuid
+  addressId   String @db.Uuid
 
   status       OrderStatus  @default(PENDING_PAYMENT)
   deliveryMode DeliveryMode
@@ -713,7 +648,7 @@ model Order {
 
   orderGroup      OrderGroup           @relation(fields: [orderGroupId], references: [id])
   retailer        User                 @relation("RetailerOrders", fields: [retailerId], references: [id])
-  distributor     DistributorProfile   @relation("DistributorOrders", fields: [distributorId], references: [id])
+  warehouse       Warehouse            @relation("WarehouseOrders", fields: [warehouseId], references: [id])
   address         Address              @relation(fields: [addressId], references: [id])
   items           OrderItem[]
   statusHistory   OrderStatusHistory[]
@@ -724,7 +659,7 @@ model Order {
   settlementItems SettlementItem[]
 
   @@index([retailerId, status, createdAt])
-  @@index([distributorId, status, createdAt])
+  @@index([warehouseId, status, createdAt])
   @@index([status, createdAt])
   @@index([orderGroupId])
   @@map("orders")
@@ -876,8 +811,7 @@ model Settlement {
   /// Tenant this row belongs to. Enforced by Row-Level Security.
   companyId     String  @db.Uuid
   companyRef    Company @relation("SettlementCompany", fields: [companyId], references: [id])
-  id            String  @id @default(uuid()) @db.Uuid
-  distributorId String  @db.Uuid
+  id String @id @default(uuid()) @db.Uuid
 
   periodStart DateTime @db.Date
   periodEnd   DateTime @db.Date
@@ -895,10 +829,9 @@ model Settlement {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  distributor DistributorProfile @relation(fields: [distributorId], references: [id])
-  items       SettlementItem[]
+  items SettlementItem[]
 
-  @@unique([distributorId, periodStart, periodEnd])
+  @@unique([companyId, periodStart, periodEnd])
   @@index([status, periodEnd])
   @@map("settlements")
 }
@@ -1208,8 +1141,8 @@ model MedicineOffer {
   /// Tenant this row belongs to. Enforced by Row-Level Security.
   companyId     String  @db.Uuid
   companyRef    Company @relation("MedicineOfferCompany", fields: [companyId], references: [id])
-  medicineId    String  @db.Uuid
-  distributorId String  @db.Uuid
+  medicineId  String  @db.Uuid
+  warehouseId String  @db.Uuid
 
   bestPricePaise   Int
   mrpPaise         Int
@@ -1229,10 +1162,10 @@ model MedicineOffer {
 
   updatedAt DateTime @default(now())
 
-  medicine    Medicine           @relation(fields: [medicineId], references: [id], onDelete: Cascade)
-  distributor DistributorProfile @relation(fields: [distributorId], references: [id], onDelete: Cascade)
+  medicine  Medicine  @relation(fields: [medicineId], references: [id], onDelete: Cascade)
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
 
-  @@id([medicineId, distributorId])
+  @@id([medicineId, warehouseId])
   @@map("medicine_offers")
 }
 
@@ -1276,10 +1209,14 @@ model Company {
   /// therefore which capabilities are even meaningful.
   businessMode BusinessMode @default(PRIVATE_DISTRIBUTOR)
 
-  gstNumber         String? @db.VarChar(15)
-  drugLicenseNumber String? @db.VarChar(60)
-  supportEmail      String? @db.VarChar(255)
-  supportPhone      String? @db.VarChar(10)
+  gstNumber         String?   @db.VarChar(15)
+  drugLicenseNumber String?   @db.VarChar(60)
+  /// Denormalised from the approved DRUG_LICENSE document, so the ordering
+  /// guard stays a single cheap read. A seller's licence lives here now that
+  /// the seller is a company rather than a profile row.
+  licenseExpiresOn  DateTime? @db.Date
+  supportEmail      String?   @db.VarChar(255)
+  supportPhone      String?   @db.VarChar(10)
 
   // --- white label ---
   logoUrl       String? @db.VarChar(500)
@@ -1290,6 +1227,12 @@ model Company {
   customDomain  String? @unique @db.VarChar(255)
 
   // --- business configuration, not platform rules ---
+  /// Weekly settlement destination. Money settles to a company, not to a
+  /// warehouse — a seller with three warehouses is still paid once.
+  bankAccountHolder String? @db.VarChar(160)
+  bankAccountNumber String? @db.VarChar(34)
+  bankIfsc          String? @db.VarChar(11)
+
   paymentTermType PaymentTermType @default(TOKEN_PLUS_COD)
   /// TOKEN_PLUS_COD only.
   tokenPercent    Int             @default(20)
@@ -1386,8 +1329,11 @@ model Warehouse {
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
-  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  address Address @relation(fields: [addressId], references: [id])
+  company        Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  address        Address         @relation(fields: [addressId], references: [id])
+  inventoryItems InventoryItem[]
+  orders         Order[]         @relation("WarehouseOrders")
+  offers         MedicineOffer[]
 
   @@index([companyId, isAcceptingOrders])
   @@map("warehouses")

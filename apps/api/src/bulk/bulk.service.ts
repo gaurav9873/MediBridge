@@ -80,7 +80,7 @@ export class BulkService {
       })
     }
 
-    const distributorId = await this.resolveDistributorScope(user, scope.role)
+    const warehouseId = await this.resolveWarehouseScope(user, scope.role)
 
     const job = await this.db.run((tx) =>
       tx.bulkJob.create({
@@ -92,7 +92,7 @@ export class BulkService {
           // Non-null because an import always belongs to exactly one tenant;
           // the platform owner imports into the global catalogue explicitly.
           companyId: requireCompany(user),
-          scopeId: distributorId ?? null,
+          scopeId: warehouseId ?? null,
           fileKey: 'pending',
           fileName: file.originalname.slice(0, 255),
           sizeBytes: file.size,
@@ -273,17 +273,29 @@ export class BulkService {
     }
   }
 
-  private async resolveDistributorScope(
+  /**
+   * Which warehouse a seller's import writes into.
+   *
+   * Taken from the signed-in user's company, never from the file — that is what
+   * stops a crafted spreadsheet from writing into someone else's stock. A
+   * company with several warehouses imports into its default one until the
+   * wizard offers a choice.
+   */
+  private async resolveWarehouseScope(
     user: SessionUser,
     role: string,
   ): Promise<string | undefined> {
     if (role !== 'DISTRIBUTOR') return undefined
-    const profile = await this.db.raw.distributorProfile.findUnique({
-      where: { userId: user.id },
-      select: { id: true },
-    })
-    if (!profile) throw new AppException(ApiErrorCode.FORBIDDEN)
-    return profile.id
+
+    const warehouse = await this.db.run((tx) =>
+      tx.warehouse.findFirst({
+        where: { companyId: requireCompany(user), deletedAt: null },
+        orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
+        select: { id: true },
+      }),
+    )
+    if (!warehouse) throw new AppException(ApiErrorCode.FORBIDDEN)
+    return warehouse.id
   }
 }
 

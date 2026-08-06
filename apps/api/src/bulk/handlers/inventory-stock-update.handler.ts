@@ -335,15 +335,15 @@ export class InventoryStockUpdateHandler implements BulkHandler<StockRow> {
       }
     >
   > {
-    if (!scope.distributorId) throw new AppException(ApiErrorCode.FORBIDDEN)
+    if (!scope.warehouseId) throw new AppException(ApiErrorCode.FORBIDDEN)
 
     const batchNumbers = [...new Set(rows.map((row) => row.data.batchNumber))]
 
     const items = await tx.inventoryItem.findMany({
-      // scope.distributorId comes from the session, so a distributorId column
-      // in the uploaded file can never widen this.
+      // scope.warehouseId comes from the session, so a warehouseId column in
+      // the uploaded file can never widen this.
       where: {
-        distributorId: scope.distributorId,
+        warehouseId: scope.warehouseId,
         batchNumber: { in: batchNumbers },
         deletedAt: null,
       },

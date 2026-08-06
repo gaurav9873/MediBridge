@@ -5,8 +5,11 @@ import { RedisService } from '../common/redis/redis.service'
 import { TenantPrismaService } from '../tenancy/tenant-prisma.service'
 
 export interface SearchResultOffer {
-  distributorId: string
-  distributorName: string
+  /** Which warehouse fulfils this offer — the unit distance is measured from. */
+  warehouseId: string
+  /** Who the retailer is buying from. A seller may ship from several warehouses. */
+  sellerId: string
+  sellerName: string
   pricePaise: number
   mrpPaise: number
   available: number
@@ -31,14 +34,16 @@ export interface SearchResultMedicine {
 
 export interface SearchResult {
   items: SearchResultMedicine[]
-  distributorsInRange: number
+  /** Distinct sellers who can reach this address, not warehouses. */
+  sellersInRange: number
   tookMs: number
   cached: boolean
 }
 
-interface NearbyDistributor {
+interface NearbyWarehouse {
   id: string
-  businessName: string
+  sellerId: string
+  sellerName: string
   distanceKm: number
   sameDayRadiusKm: number
 }
@@ -64,8 +69,8 @@ interface NearbyDistributor {
 export class SearchService {
   private readonly logger = new Logger(SearchService.name)
 
-  /** Offers pulled per distributor before merging. See searchOffers(). */
-  private static readonly PER_DISTRIBUTOR_FANOUT = 100
+  /** Offers pulled per warehouse before merging. See searchOffers(). */
+  private static readonly PER_WAREHOUSE_FANOUT = 100
   /** Offers considered in total before collapsing to one row per medicine. */
   private static readonly MERGE_LIMIT = 400
 
@@ -109,16 +114,17 @@ export class SearchService {
       return { ...cached, cached: true, tookMs: Date.now() - startedAt }
     }
 
-    const nearby = await this.findNearbyDistributors(address.latitude, address.longitude)
+    const nearby = await this.findNearbyWarehouses(address.latitude, address.longitude)
     if (nearby.length === 0) {
-      return { items: [], distributorsInRange: 0, tookMs: Date.now() - startedAt, cached: false }
+      return { items: [], sellersInRange: 0, tookMs: Date.now() - startedAt, cached: false }
     }
 
     const items = await this.searchOffers(nearby, input)
 
     const result: SearchResult = {
       items,
-      distributorsInRange: nearby.length,
+      // Sellers, not warehouses: two depots of one distributor are one choice.
+      sellersInRange: new Set(nearby.map((warehouse) => warehouse.sellerId)).size,
       tookMs: Date.now() - startedAt,
       cached: false,
     }
@@ -130,29 +136,36 @@ export class SearchService {
   }
 
   /**
-   * Which distributors can reach this retailer.
+   * Which warehouses can reach this retailer.
    *
    * The only PostGIS query in the path, and it returns tens of rows at most.
    * `sameDayAvailable` is decided here rather than in the offer query because
-   * each distributor has their own radius.
+   * each warehouse has its own radius.
+   *
+   * The seller's name comes from the company: stock ships from a warehouse but
+   * is sold by the business that owns it.
    */
-  private async findNearbyDistributors(
+  private async findNearbyWarehouses(
     latitude: number,
     longitude: number,
-  ): Promise<NearbyDistributor[]> {
-    // Widest radius any distributor uses, so nobody who could deliver is
+  ): Promise<NearbyWarehouse[]> {
+    // Widest radius any warehouse uses, so nobody who could deliver is
     // excluded before their own radius is checked.
     const MAX_REACH_METRES = 200_000
 
     return this.db.run(
-      (tx) => tx.$queryRaw<NearbyDistributor[]>`
-      SELECT dp.id,
-             dp."businessName",
+      (tx) => tx.$queryRaw<NearbyWarehouse[]>`
+      SELECT w.id,
+             w."companyId" AS "sellerId",
+             c.name        AS "sellerName",
              ROUND((ST_Distance(hub.location, ST_SetSRID(ST_MakePoint(${longitude}, ${latitude}), 4326)::geography) / 1000)::numeric, 1)::float8 AS "distanceKm",
-             dp."sameDayRadiusKm"
-      FROM distributor_profiles dp
-      JOIN addresses hub ON hub.id = dp."hubAddressId"
-      WHERE dp."isAcceptingOrders" = true
+             w."sameDayRadiusKm"
+      FROM warehouses w
+      JOIN companies c ON c.id = w."companyId"
+      JOIN addresses hub ON hub.id = w."addressId"
+      WHERE w."isAcceptingOrders" = true
+        AND w."deletedAt" IS NULL
+        AND c."deletedAt" IS NULL
         AND ST_DWithin(
               hub.location,
               ST_SetSRID(ST_MakePoint(${longitude}, ${latitude}), 4326)::geography,
@@ -166,8 +179,8 @@ export class SearchService {
   /**
    * The hot query.
    *
-   * A LATERAL top-N per distributor, not one big scan. That shape is what lets
-   * Postgres use (distributorId, bestPricePaise) as an ORDERED index scan and
+   * A LATERAL top-N per warehouse, not one big scan. That shape is what lets
+   * Postgres use (warehouseId, bestPricePaise) as an ORDERED index scan and
    * stop after the fanout limit, instead of aggregating every matching offer
    * before it can sort. It is the difference between 9 ms and 800 ms.
    *
@@ -175,11 +188,11 @@ export class SearchService {
    * hundred rows rather than hundreds of thousands.
    */
   private async searchOffers(
-    nearby: NearbyDistributor[],
+    nearby: NearbyWarehouse[],
     input: MedicineSearchInput,
   ): Promise<SearchResultMedicine[]> {
-    const distributorIds = nearby.map((distributor) => distributor.id)
-    const byId = new Map(nearby.map((distributor) => [distributor.id, distributor]))
+    const warehouseIds = nearby.map((warehouse) => warehouse.id)
+    const byId = new Map(nearby.map((warehouse) => [warehouse.id, warehouse]))
 
     const query = input.query?.trim()
 
@@ -200,7 +213,7 @@ export class SearchService {
       tx.$queryRawUnsafe<
         Array<{
           medicineId: string
-          distributorId: string
+          warehouseId: string
           name: string
           brand: string
           composition: string
@@ -213,13 +226,13 @@ export class SearchService {
         }>
       >(
         `
-      SELECT o."medicineId", o."distributorId", o.name, o.brand, o.composition, o.form,
+      SELECT o."medicineId", o."warehouseId", o.name, o.brand, o.composition, o.form,
              o."bestPricePaise", o."mrpPaise", o."totalAvailable", o."minOrderQuantity",
              o."latestExpiry"
       FROM unnest($1::uuid[]) AS d(id)
       CROSS JOIN LATERAL (
         SELECT * FROM medicine_offers
-        WHERE "distributorId" = d.id
+        WHERE "warehouseId" = d.id
           ${query ? `AND "searchVector" @@ websearch_to_tsquery('english', $4)` : ''}
           ${input.form ? `AND form = $5::"MedicineForm"` : ''}
         ORDER BY ${innerOrder}
@@ -228,8 +241,8 @@ export class SearchService {
       ORDER BY ${outerOrder}
       LIMIT $3
       `,
-        distributorIds,
-        SearchService.PER_DISTRIBUTOR_FANOUT,
+        warehouseIds,
+        SearchService.PER_WAREHOUSE_FANOUT,
         SearchService.MERGE_LIMIT,
         ...(query ? [query] : []),
         ...(input.form ? [input.form] : []),
@@ -241,22 +254,21 @@ export class SearchService {
     const byMedicine = new Map<string, SearchResultMedicine>()
 
     for (const row of rows) {
-      const distributor = byId.get(row.distributorId)
-      if (!distributor) continue
+      const warehouse = byId.get(row.warehouseId)
+      if (!warehouse) continue
 
-      const sameDay = row.distributorId
-        ? distributor.distanceKm <= distributor.sameDayRadiusKm
-        : false
+      const sameDay = warehouse.distanceKm <= warehouse.sameDayRadiusKm
 
       const offer: SearchResultOffer = {
-        distributorId: row.distributorId,
-        distributorName: distributor.businessName,
+        warehouseId: row.warehouseId,
+        sellerId: warehouse.sellerId,
+        sellerName: warehouse.sellerName,
         pricePaise: row.bestPricePaise,
         mrpPaise: row.mrpPaise,
         available: row.totalAvailable,
         minOrderQuantity: row.minOrderQuantity,
         expiresOn: row.latestExpiry.toISOString().slice(0, 10),
-        distanceKm: distributor.distanceKm,
+        distanceKm: warehouse.distanceKm,
         sameDayAvailable: sameDay,
       }
 

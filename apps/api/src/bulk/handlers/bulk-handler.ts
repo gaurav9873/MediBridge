@@ -26,7 +26,8 @@ export type PrismaTx = TenantTx
 export interface BulkScope {
   userId: string
   role: string
-  distributorId?: string
+  /** Which warehouse a seller's rows land in. Absent for admin-wide imports. */
+  warehouseId?: string
 }
 
 /** A row that survived shape validation, tagged with where it came from. */
