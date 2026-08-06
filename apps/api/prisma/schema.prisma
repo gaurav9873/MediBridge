@@ -203,6 +203,9 @@ enum ProblemStatus {
 // ---------------------------------------------------------------------------
 
 model User {
+  /// Tenant this row belongs to. Enforced by Row-Level Security.
+  companyId     String?       @db.Uuid
+  companyRef    Company?      @relation("UserCompany", fields: [companyId], references: [id])
   id            String        @id @default(uuid()) @db.Uuid
   /// Primary sign-in identifier. Stored as bare 10 digits, no +91.
   phone         String        @unique @db.VarChar(10)
@@ -245,6 +248,8 @@ model User {
   updatedSettings    Setting[]
   initiatedRefunds   Refund[]
   bulkJobs           BulkJob[]
+  customerProfile    Customer?
+  roleAssignments    UserRoleAssignment[]
 
   @@index([role, accountStatus])
   @@index([deletedAt])
@@ -286,13 +291,13 @@ model DistributorProfile {
   hubAddress   Address? @relation("DistributorHub", fields: [hubAddressId], references: [id])
 
   /// Retailers inside this many km may choose Same-Day Delivery.
-  sameDayRadiusKm        Int      @default(25)
+  sameDayRadiusKm        Int     @default(25)
   /// Orders placed after this local time roll to Next-Day. Stored "HH:MM".
-  sameDayCutoffTime      String   @default("14:00") @db.VarChar(5)
-  deliveryChargePaise    Int      @default(0)
+  sameDayCutoffTime      String  @default("14:00") @db.VarChar(5)
+  deliveryChargePaise    Int     @default(0)
   freeDeliveryAbovePaise Int?
   /// Distributor's own kill switch — hides all their stock without deleting it.
-  isAcceptingOrders      Boolean  @default(true)
+  isAcceptingOrders      Boolean @default(true)
 
   // Weekly settlement destination.
   bankAccountHolder String? @db.VarChar(160)
@@ -315,13 +320,16 @@ model DistributorProfile {
 
 /// Uploaded drug licences and GST certificates, plus their approval trail.
 model Document {
-  id       String       @id @default(uuid()) @db.Uuid
-  userId   String       @db.Uuid
-  type     DocumentType
+  /// Tenant this row belongs to. Enforced by Row-Level Security.
+  companyId  String?      @db.Uuid
+  companyRef Company?     @relation("DocumentCompany", fields: [companyId], references: [id])
+  id         String       @id @default(uuid()) @db.Uuid
+  userId     String       @db.Uuid
+  type       DocumentType
   /// Licence or GST number as printed on the document.
-  number   String       @db.VarChar(60)
+  number     String       @db.VarChar(60)
   /// Only drug licences expire.
-  expiresOn DateTime?   @db.Date
+  expiresOn  DateTime?    @db.Date
 
   /// S3 object key. Never a public URL — these are served via signed links.
   fileKey   String @db.VarChar(500)
@@ -349,8 +357,11 @@ model Document {
 }
 
 model Address {
-  id     String @id @default(uuid()) @db.Uuid
-  userId String @db.Uuid
+  /// Tenant this row belongs to. Enforced by Row-Level Security.
+  companyId  String?  @db.Uuid
+  companyRef Company? @relation("AddressCompany", fields: [companyId], references: [id])
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @db.Uuid
 
   label        String  @db.VarChar(40)
   line1        String  @db.VarChar(200)
@@ -378,6 +389,7 @@ model Address {
   distributorOf DistributorProfile? @relation("DistributorHub")
   orderGroups   OrderGroup[]
   orders        Order[]
+  warehouses    Warehouse[]
 
   @@index([userId, isDefault])
   @@index([pincode])
@@ -393,9 +405,9 @@ model RefreshToken {
   tokenHash String   @unique @db.VarChar(64)
   expiresAt DateTime
 
-  revokedAt            DateTime?
+  revokedAt           DateTime?
   /// Set when this token is rotated, so a replayed old token is detectable.
-  replacedByTokenHash  String?   @db.VarChar(64)
+  replacedByTokenHash String?   @db.VarChar(64)
 
   userAgent String? @db.VarChar(400)
   ipAddress String? @db.VarChar(45)
@@ -417,15 +429,18 @@ model RefreshToken {
 /// is what makes cross-distributor price comparison possible — without it,
 /// "Crocin 500" and "crocin 500mg" become two unrelated products.
 model Medicine {
-  id          String       @id @default(uuid()) @db.Uuid
-  name        String       @db.VarChar(200)
-  brand       String       @db.VarChar(120)
+  /// Tenant this row belongs to. Enforced by Row-Level Security.
+  companyId    String?      @db.Uuid
+  companyRef   Company?     @relation("MedicineCompany", fields: [companyId], references: [id])
+  id           String       @id @default(uuid()) @db.Uuid
+  name         String       @db.VarChar(200)
+  brand        String       @db.VarChar(120)
   /// Active salt. Retailers search by this at least as often as by brand.
-  composition String       @db.VarChar(300)
-  form        MedicineForm
-  strength    String?      @db.VarChar(60)
-  packSize    String?      @db.VarChar(60)
-  manufacturer String?     @db.VarChar(160)
+  composition  String       @db.VarChar(300)
+  form         MedicineForm
+  strength     String?      @db.VarChar(60)
+  packSize     String?      @db.VarChar(60)
+  manufacturer String?      @db.VarChar(160)
 
   hsnCode String @db.VarChar(8)
   /// Whole percentage: 0, 5, 12 or 18.
@@ -458,6 +473,9 @@ model Medicine {
 
 /// A distributor asking for a medicine that is missing from the master list.
 model MedicineRequest {
+  /// Tenant this row belongs to. Enforced by Row-Level Security.
+  companyId     String                @db.Uuid
+  companyRef    Company               @relation("MedicineRequestCompany", fields: [companyId], references: [id])
   id            String                @id @default(uuid()) @db.Uuid
   requestedById String                @db.Uuid
   name          String                @db.VarChar(200)
@@ -494,9 +512,12 @@ model MedicineRequest {
 /// Batch-level tracking is not optional in pharma: every unit sold must carry a
 /// batch number and expiry, and stock is picked oldest-expiry-first (FEFO).
 model InventoryItem {
-  id            String @id @default(uuid()) @db.Uuid
-  distributorId String @db.Uuid
-  medicineId    String @db.Uuid
+  /// Tenant this row belongs to. Enforced by Row-Level Security.
+  companyId     String  @db.Uuid
+  companyRef    Company @relation("InventoryItemCompany", fields: [companyId], references: [id])
+  id            String  @id @default(uuid()) @db.Uuid
+  distributorId String  @db.Uuid
+  medicineId    String  @db.Uuid
 
   batchNumber String   @db.VarChar(60)
   expiryDate  DateTime @db.Date
@@ -538,8 +559,11 @@ model InventoryItem {
 /// Created inside the same transaction that takes a row lock on the inventory
 /// item, and swept by a background job once `expiresAt` passes.
 model StockReservation {
-  id              String @id @default(uuid()) @db.Uuid
-  inventoryItemId String @db.Uuid
+  /// Tenant this row belongs to. Enforced by Row-Level Security.
+  companyId       String  @db.Uuid
+  companyRef      Company @relation("StockReservationCompany", fields: [companyId], references: [id])
+  id              String  @id @default(uuid()) @db.Uuid
+  inventoryItemId String  @db.Uuid
   quantity        Int
 
   /// Set once the reservation is attached to a real order.
@@ -568,6 +592,9 @@ model StockReservation {
 /// Server-authoritative cart. Prices are always re-read from inventory at
 /// checkout — `addedAtPricePaise` exists only to detect and explain a change.
 model Cart {
+  /// Tenant this row belongs to. Enforced by Row-Level Security.
+  companyId  String   @db.Uuid
+  companyRef Company  @relation("CartCompany", fields: [companyId], references: [id])
   id         String   @id @default(uuid()) @db.Uuid
   retailerId String   @unique @db.Uuid
   createdAt  DateTime @default(now())
@@ -580,9 +607,12 @@ model Cart {
 }
 
 model CartItem {
-  id              String @id @default(uuid()) @db.Uuid
-  cartId          String @db.Uuid
-  inventoryItemId String @db.Uuid
+  /// Tenant this row belongs to. Enforced by Row-Level Security.
+  companyId       String  @db.Uuid
+  companyRef      Company @relation("CartItemCompany", fields: [companyId], references: [id])
+  id              String  @id @default(uuid()) @db.Uuid
+  cartId          String  @db.Uuid
+  inventoryItemId String  @db.Uuid
   quantity        Int
 
   /// The price the retailer saw when adding this. Compared at checkout.
@@ -605,11 +635,14 @@ model CartItem {
 /// One checkout. A cart spanning several distributors produces ONE group and
 /// several Orders — the retailer pays once, each distributor fulfils separately.
 model OrderGroup {
-  id          String @id @default(uuid()) @db.Uuid
+  /// Tenant this row belongs to. Enforced by Row-Level Security.
+  companyId   String  @db.Uuid
+  companyRef  Company @relation("OrderGroupCompany", fields: [companyId], references: [id])
+  id          String  @id @default(uuid()) @db.Uuid
   /// Human-facing, e.g. "MB-2026-000123".
-  groupNumber String @unique @db.VarChar(24)
-  retailerId  String @db.Uuid
-  addressId   String @db.Uuid
+  groupNumber String  @unique @db.VarChar(24)
+  retailerId  String  @db.Uuid
+  addressId   String  @db.Uuid
 
   totalPaise   Int
   tokenPaise   Int
@@ -636,9 +669,12 @@ model OrderGroup {
 }
 
 model Order {
-  id           String @id @default(uuid()) @db.Uuid
-  orderNumber  String @unique @db.VarChar(24)
-  orderGroupId String @db.Uuid
+  /// Tenant this row belongs to. Enforced by Row-Level Security.
+  companyId    String  @db.Uuid
+  companyRef   Company @relation("OrderCompany", fields: [companyId], references: [id])
+  id           String  @id @default(uuid()) @db.Uuid
+  orderNumber  String  @unique @db.VarChar(24)
+  orderGroupId String  @db.Uuid
 
   retailerId    String @db.Uuid
   distributorId String @db.Uuid
@@ -674,16 +710,16 @@ model Order {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  orderGroup    OrderGroup           @relation(fields: [orderGroupId], references: [id])
-  retailer      User                 @relation("RetailerOrders", fields: [retailerId], references: [id])
-  distributor   DistributorProfile   @relation("DistributorOrders", fields: [distributorId], references: [id])
-  address       Address              @relation(fields: [addressId], references: [id])
-  items         OrderItem[]
-  statusHistory OrderStatusHistory[]
-  payments      Payment[]
-  refunds       Refund[]
-  delivery      Delivery?
-  problems      ProblemReport[]
+  orderGroup      OrderGroup           @relation(fields: [orderGroupId], references: [id])
+  retailer        User                 @relation("RetailerOrders", fields: [retailerId], references: [id])
+  distributor     DistributorProfile   @relation("DistributorOrders", fields: [distributorId], references: [id])
+  address         Address              @relation(fields: [addressId], references: [id])
+  items           OrderItem[]
+  statusHistory   OrderStatusHistory[]
+  payments        Payment[]
+  refunds         Refund[]
+  delivery        Delivery?
+  problems        ProblemReport[]
   settlementItems SettlementItem[]
 
   @@index([retailerId, status, createdAt])
@@ -699,10 +735,13 @@ model Order {
 /// or a distributor changes their price tomorrow, this row still shows what was
 /// actually bought and at what price.
 model OrderItem {
-  id              String @id @default(uuid()) @db.Uuid
-  orderId         String @db.Uuid
-  inventoryItemId String @db.Uuid
-  medicineId      String @db.Uuid
+  /// Tenant this row belongs to. Enforced by Row-Level Security.
+  companyId       String  @db.Uuid
+  companyRef      Company @relation("OrderItemCompany", fields: [companyId], references: [id])
+  id              String  @id @default(uuid()) @db.Uuid
+  orderId         String  @db.Uuid
+  inventoryItemId String  @db.Uuid
+  medicineId      String  @db.Uuid
 
   // --- snapshot at purchase time ---
   medicineName String   @db.VarChar(200)
@@ -714,12 +753,12 @@ model OrderItem {
   hsnCode      String   @db.VarChar(8)
   gstRate      Int
 
-  orderedQuantity Int
+  orderedQuantity  Int
   /// Set when a distributor can only supply part of the line. Null until then.
   acceptedQuantity Int?
 
-  mrpPaise         Int
-  unitPricePaise   Int
+  mrpPaise          Int
+  unitPricePaise    Int
   lineSubtotalPaise Int
   lineGstPaise      Int
   lineTotalPaise    Int
@@ -737,6 +776,9 @@ model OrderItem {
 
 /// Append-only status trail. Drives the progress timeline the retailer sees.
 model OrderStatusHistory {
+  /// Tenant this row belongs to. Enforced by Row-Level Security.
+  companyId   String       @db.Uuid
+  companyRef  Company      @relation("OrderStatusHistoryCompany", fields: [companyId], references: [id])
   id          String       @id @default(uuid()) @db.Uuid
   orderId     String       @db.Uuid
   fromStatus  OrderStatus?
@@ -757,6 +799,9 @@ model OrderStatusHistory {
 // ---------------------------------------------------------------------------
 
 model Payment {
+  /// Tenant this row belongs to. Enforced by Row-Level Security.
+  companyId    String  @db.Uuid
+  companyRef   Company @relation("PaymentCompany", fields: [companyId], references: [id])
   id           String  @id @default(uuid()) @db.Uuid
   /// TOKEN payments belong to the group (one payment covers the whole cart).
   orderGroupId String? @db.Uuid
@@ -796,9 +841,12 @@ model Payment {
 }
 
 model Refund {
-  id        String @id @default(uuid()) @db.Uuid
-  paymentId String @db.Uuid
-  orderId   String @db.Uuid
+  /// Tenant this row belongs to. Enforced by Row-Level Security.
+  companyId  String  @db.Uuid
+  companyRef Company @relation("RefundCompany", fields: [companyId], references: [id])
+  id         String  @id @default(uuid()) @db.Uuid
+  paymentId  String  @db.Uuid
+  orderId    String  @db.Uuid
 
   amountPaise Int
   reason      String        @db.Text
@@ -824,21 +872,24 @@ model Refund {
 
 /// Weekly payout of collected token money to a distributor, minus platform fee.
 model Settlement {
-  id            String @id @default(uuid()) @db.Uuid
-  distributorId String @db.Uuid
+  /// Tenant this row belongs to. Enforced by Row-Level Security.
+  companyId     String  @db.Uuid
+  companyRef    Company @relation("SettlementCompany", fields: [companyId], references: [id])
+  id            String  @id @default(uuid()) @db.Uuid
+  distributorId String  @db.Uuid
 
   periodStart DateTime @db.Date
   periodEnd   DateTime @db.Date
 
-  grossPaise      Int
+  grossPaise       Int
   platformFeePaise Int
-  netPayablePaise Int
+  netPayablePaise  Int
 
-  status    SettlementStatus @default(PENDING)
+  status        SettlementStatus @default(PENDING)
   /// Bank reference for the transfer, shown to the distributor once paid.
-  utrNumber String?          @db.VarChar(40)
-  paidAt    DateTime?
-  failureReason String?      @db.Text
+  utrNumber     String?          @db.VarChar(40)
+  paidAt        DateTime?
+  failureReason String?          @db.Text
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -852,9 +903,12 @@ model Settlement {
 }
 
 model SettlementItem {
-  id           String @id @default(uuid()) @db.Uuid
-  settlementId String @db.Uuid
-  orderId      String @db.Uuid
+  /// Tenant this row belongs to. Enforced by Row-Level Security.
+  companyId    String  @db.Uuid
+  companyRef   Company @relation("SettlementItemCompany", fields: [companyId], references: [id])
+  id           String  @id @default(uuid()) @db.Uuid
+  settlementId String  @db.Uuid
+  orderId      String  @db.Uuid
 
   grossPaise       Int
   platformFeePaise Int
@@ -876,8 +930,11 @@ model SettlementItem {
 /// In the MVP the distributor delivers with their own people. MediBridge tracks
 /// status and verifies the handover with a 4-digit code the retailer reads out.
 model Delivery {
-  id      String @id @default(uuid()) @db.Uuid
-  orderId String @unique @db.Uuid
+  /// Tenant this row belongs to. Enforced by Row-Level Security.
+  companyId  String  @db.Uuid
+  companyRef Company @relation("DeliveryCompany", fields: [companyId], references: [id])
+  id         String  @id @default(uuid()) @db.Uuid
+  orderId    String  @unique @db.Uuid
 
   status DeliveryStatus @default(NOT_STARTED)
   mode   DeliveryMode
@@ -910,6 +967,9 @@ model Delivery {
 }
 
 model ProblemReport {
+  /// Tenant this row belongs to. Enforced by Row-Level Security.
+  companyId    String          @db.Uuid
+  companyRef   Company         @relation("ProblemReportCompany", fields: [companyId], references: [id])
   id           String          @id @default(uuid()) @db.Uuid
   orderId      String          @db.Uuid
   reportedById String          @db.Uuid
@@ -938,13 +998,16 @@ model ProblemReport {
 // ---------------------------------------------------------------------------
 
 model Notification {
-  id      String              @id @default(uuid()) @db.Uuid
-  userId  String              @db.Uuid
-  event   NotificationEvent
-  channel NotificationChannel
+  /// Tenant this row belongs to. Enforced by Row-Level Security.
+  companyId  String?             @db.Uuid
+  companyRef Company?            @relation("NotificationCompany", fields: [companyId], references: [id])
+  id         String              @id @default(uuid()) @db.Uuid
+  userId     String              @db.Uuid
+  event      NotificationEvent
+  channel    NotificationChannel
 
-  title String @db.VarChar(200)
-  body  String @db.Text
+  title   String @db.VarChar(200)
+  body    String @db.Text
   /// Deep-link target and template variables.
   payload Json?
 
@@ -963,11 +1026,14 @@ model Notification {
 }
 
 model NotificationPreference {
-  id      String              @id @default(uuid()) @db.Uuid
-  userId  String              @db.Uuid
-  event   NotificationEvent
-  channel NotificationChannel
-  enabled Boolean             @default(true)
+  /// Tenant this row belongs to. Enforced by Row-Level Security.
+  companyId  String?             @db.Uuid
+  companyRef Company?            @relation("NotificationPreferenceCompany", fields: [companyId], references: [id])
+  id         String              @id @default(uuid()) @db.Uuid
+  userId     String              @db.Uuid
+  event      NotificationEvent
+  channel    NotificationChannel
+  enabled    Boolean             @default(true)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -981,6 +1047,9 @@ model NotificationPreference {
 /// Platform-wide business rules, editable from the Admin panel.
 /// Nothing in this table should ever need a code deploy to change.
 model Setting {
+  /// Tenant this row belongs to. Enforced by Row-Level Security.
+  companyId   String?  @db.Uuid
+  companyRef  Company? @relation("SettingCompany", fields: [companyId], references: [id])
   key         String   @id @db.VarChar(80)
   value       Json
   /// Plain-English explanation shown next to the field in Admin.
@@ -994,11 +1063,14 @@ model Setting {
 }
 
 model AuditLog {
-  id         String  @id @default(uuid()) @db.Uuid
-  actorId    String? @db.Uuid
-  action     String  @db.VarChar(80)
-  entityType String  @db.VarChar(60)
-  entityId   String  @db.VarChar(64)
+  /// Tenant this row belongs to. Enforced by Row-Level Security.
+  companyId  String?  @db.Uuid
+  companyRef Company? @relation("AuditLogCompany", fields: [companyId], references: [id])
+  id         String   @id @default(uuid()) @db.Uuid
+  actorId    String?  @db.Uuid
+  action     String   @db.VarChar(80)
+  entityType String   @db.VarChar(60)
+  entityId   String   @db.VarChar(64)
 
   before Json?
   after  Json?
@@ -1050,11 +1122,14 @@ enum BulkJobStatus {
 /// Doubles as the progress record (the worker updates processedRows each
 /// batch), the resume checkpoint, and the import-history row.
 model BulkJob {
-  id     String        @id @default(uuid()) @db.Uuid
-  type   BulkJobType
-  status BulkJobStatus @default(PENDING)
+  /// Tenant this row belongs to. Enforced by Row-Level Security.
+  companyId  String        @db.Uuid
+  companyRef Company       @relation("BulkJobCompany", fields: [companyId], references: [id])
+  id         String        @id @default(uuid()) @db.Uuid
+  type       BulkJobType
+  status     BulkJobStatus @default(PENDING)
 
-  createdById String @db.Uuid
+  createdById String  @db.Uuid
   /// Distributor jobs are scoped to their own inventory. Null for admin jobs.
   /// Always taken from the session, never from the uploaded file.
   scopeId     String? @db.Uuid
@@ -1068,10 +1143,10 @@ model BulkJob {
   /// Also the resume checkpoint: on resume the worker skips rows up to here.
   processedRows Int  @default(0)
 
-  createCount Int @default(0)
-  updateCount Int @default(0)
-  skipCount   Int @default(0)
-  errorCount  Int @default(0)
+  createCount     Int     @default(0)
+  updateCount     Int     @default(0)
+  skipCount       Int     @default(0)
+  errorCount      Int     @default(0)
   /// Set when the recorded-error cap is reached.
   errorsTruncated Boolean @default(false)
 
@@ -1101,15 +1176,18 @@ model BulkJob {
 }
 
 model BulkJobError {
-  id        String  @id @default(uuid()) @db.Uuid
-  jobId     String  @db.Uuid
-  rowNumber Int
-  column    String? @db.VarChar(80)
-  value     String? @db.VarChar(500)
-  message   String  @db.Text
+  /// Tenant this row belongs to. Enforced by Row-Level Security.
+  companyId  String  @db.Uuid
+  companyRef Company @relation("BulkJobErrorCompany", fields: [companyId], references: [id])
+  id         String  @id @default(uuid()) @db.Uuid
+  jobId      String  @db.Uuid
+  rowNumber  Int
+  column     String? @db.VarChar(80)
+  value      String? @db.VarChar(500)
+  message    String  @db.Text
   /// The original row, so the error file can be rebuilt without re-reading
   /// the upload — and so the row survives even if the upload is purged.
-  rawRow    Json?
+  rawRow     Json?
 
   createdAt DateTime @default(now())
 
@@ -1126,8 +1204,11 @@ model BulkJobError {
 /// so application code never writes here. Reading it replaces a four-table
 /// join plus aggregation with a single index-ordered scan.
 model MedicineOffer {
-  medicineId    String @db.Uuid
-  distributorId String @db.Uuid
+  /// Tenant this row belongs to. Enforced by Row-Level Security.
+  companyId     String  @db.Uuid
+  companyRef    Company @relation("MedicineOfferCompany", fields: [companyId], references: [id])
+  medicineId    String  @db.Uuid
+  distributorId String  @db.Uuid
 
   bestPricePaise   Int
   mrpPaise         Int
@@ -1152,4 +1233,306 @@ model MedicineOffer {
 
   @@id([medicineId, distributorId])
   @@map("medicine_offers")
+}
+
+// ---------------------------------------------------------------------------
+// Multi-tenancy
+//
+// A private distributor portal is a marketplace with exactly one seller, so
+// both business models share these tables. What differs is only how many
+// companies a customer may buy from. See docs/MULTI-TENANCY.md.
+// ---------------------------------------------------------------------------
+
+enum BusinessMode {
+  MARKETPLACE
+  PRIVATE_DISTRIBUTOR
+}
+
+enum CompanyStatus {
+  TRIAL
+  ACTIVE
+  SUSPENDED
+  CANCELLED
+}
+
+enum PaymentTermType {
+  TOKEN_PLUS_COD
+  PREPAID
+  COD
+  CREDIT
+}
+
+/// A tenant. Every business row in the database belongs to one of these, and
+/// PostgreSQL Row-Level Security enforces that — see the RLS migration.
+model Company {
+  id     String        @id @default(uuid()) @db.Uuid
+  name   String        @db.VarChar(160)
+  /// Subdomain label: portal.<slug>.medibridge.in
+  slug   String        @unique @db.VarChar(63)
+  status CompanyStatus @default(TRIAL)
+
+  /// Decides how many sellers this company's customers can buy from, and
+  /// therefore which capabilities are even meaningful.
+  businessMode BusinessMode @default(PRIVATE_DISTRIBUTOR)
+
+  gstNumber         String? @db.VarChar(15)
+  drugLicenseNumber String? @db.VarChar(60)
+  supportEmail      String? @db.VarChar(255)
+  supportPhone      String? @db.VarChar(10)
+
+  // --- white label ---
+  logoUrl       String? @db.VarChar(500)
+  /// One seed colour. The design tokens derive every surface and state from it,
+  /// so a tenant cannot produce an unreadable palette.
+  brandColor    String? @db.VarChar(9)
+  loginImageUrl String? @db.VarChar(500)
+  customDomain  String? @unique @db.VarChar(255)
+
+  // --- business configuration, not platform rules ---
+  paymentTermType PaymentTermType @default(TOKEN_PLUS_COD)
+  /// TOKEN_PLUS_COD only.
+  tokenPercent    Int             @default(20)
+  /// CREDIT only.
+  creditDays      Int             @default(30)
+
+  planId      String?   @db.Uuid
+  trialEndsOn DateTime? @db.Date
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  plan          Plan?               @relation(fields: [planId], references: [id])
+  warehouses    Warehouse[]
+  customers     Customer[]
+  roles         Role[]
+  subscriptions Subscription[]
+  overrides     CompanyCapability[]
+  /// Marketplace mode: the seller companies whose catalogue this portal shows.
+  sellerLinks   CompanyLink[]       @relation("MarketplaceOperator")
+  marketplaces  CompanyLink[]       @relation("SellerCompany")
+
+  // Tenant-scoped data.
+  users                   User[]                   @relation("UserCompany")
+  documents               Document[]               @relation("DocumentCompany")
+  addresss                Address[]                @relation("AddressCompany")
+  medicines               Medicine[]               @relation("MedicineCompany")
+  medicineRequests        MedicineRequest[]        @relation("MedicineRequestCompany")
+  inventoryItems          InventoryItem[]          @relation("InventoryItemCompany")
+  stockReservations       StockReservation[]       @relation("StockReservationCompany")
+  carts                   Cart[]                   @relation("CartCompany")
+  cartItems               CartItem[]               @relation("CartItemCompany")
+  orderGroups             OrderGroup[]             @relation("OrderGroupCompany")
+  orders                  Order[]                  @relation("OrderCompany")
+  orderItems              OrderItem[]              @relation("OrderItemCompany")
+  orderStatusHistorys     OrderStatusHistory[]     @relation("OrderStatusHistoryCompany")
+  payments                Payment[]                @relation("PaymentCompany")
+  refunds                 Refund[]                 @relation("RefundCompany")
+  deliverys               Delivery[]               @relation("DeliveryCompany")
+  problemReports          ProblemReport[]          @relation("ProblemReportCompany")
+  notifications           Notification[]           @relation("NotificationCompany")
+  notificationPreferences NotificationPreference[] @relation("NotificationPreferenceCompany")
+  settings                Setting[]                @relation("SettingCompany")
+  auditLogs               AuditLog[]               @relation("AuditLogCompany")
+  bulkJobs                BulkJob[]                @relation("BulkJobCompany")
+  bulkJobErrors           BulkJobError[]           @relation("BulkJobErrorCompany")
+  medicineOffers          MedicineOffer[]          @relation("MedicineOfferCompany")
+  settlements             Settlement[]             @relation("SettlementCompany")
+  settlementItems         SettlementItem[]         @relation("SettlementItemCompany")
+
+  @@index([status, businessMode])
+  @@index([deletedAt])
+  @@map("companies")
+}
+
+/// Which sellers a marketplace shows. Empty for a private distributor, whose
+/// customers buy only from the company itself.
+model CompanyLink {
+  id            String @id @default(uuid()) @db.Uuid
+  marketplaceId String @db.Uuid
+  sellerId      String @db.Uuid
+
+  isActive      Boolean  @default(true)
+  /// What the marketplace takes from each order, in basis points.
+  commissionBps Int      @default(0)
+  createdAt     DateTime @default(now())
+
+  marketplace Company @relation("MarketplaceOperator", fields: [marketplaceId], references: [id], onDelete: Cascade)
+  seller      Company @relation("SellerCompany", fields: [sellerId], references: [id], onDelete: Cascade)
+
+  @@unique([marketplaceId, sellerId])
+  @@map("company_links")
+}
+
+/// A place a company ships from. Carries the geography, so the Same-Day radius
+/// works identically in both business modes — it just picks the nearest
+/// warehouse of whichever companies are sellable.
+model Warehouse {
+  id        String @id @default(uuid()) @db.Uuid
+  companyId String @db.Uuid
+  name      String @db.VarChar(120)
+  addressId String @db.Uuid
+
+  sameDayRadiusKm        Int     @default(25)
+  sameDayCutoffTime      String  @default("14:00") @db.VarChar(5)
+  deliveryChargePaise    Int     @default(0)
+  freeDeliveryAbovePaise Int?
+  isAcceptingOrders      Boolean @default(true)
+  isDefault              Boolean @default(false)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  address Address @relation(fields: [addressId], references: [id])
+
+  @@index([companyId, isAcceptingOrders])
+  @@map("warehouses")
+}
+
+/// A buyer. Belongs to exactly one company — the portal they signed up on.
+/// In marketplace mode that company is the operator, and the customer may
+/// order from any linked seller.
+model Customer {
+  id           String  @id @default(uuid()) @db.Uuid
+  companyId    String  @db.Uuid
+  userId       String  @unique @db.Uuid
+  businessName String  @db.VarChar(160)
+  gstNumber    String? @db.VarChar(15)
+
+  drugLicenseNumber String?   @db.VarChar(60)
+  licenseExpiresOn  DateTime? @db.Date
+
+  /// CREDIT terms only. Null means no credit allowed.
+  creditLimitPaise Int?
+  /// Overrides the company default for this customer.
+  paymentTermType  PaymentTermType?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, gstNumber])
+  @@index([companyId, deletedAt])
+  @@map("customers")
+}
+
+// --- roles and permissions ------------------------------------------------
+
+/// Fixed roles ship in the MVP as seeded rows with isSystem = true. Custom
+/// roles are the same table with isSystem = false, so enabling them later is a
+/// UI change — the schema and the guards already support it.
+model Role {
+  id        String  @id @default(uuid()) @db.Uuid
+  /// Null for platform-owner roles that belong to no company.
+  companyId String? @db.Uuid
+  /// Matches SystemRole in @medibridge/types for seeded roles.
+  key       String  @db.VarChar(60)
+  name      String  @db.VarChar(80)
+  isSystem  Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company     Company?             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  permissions RolePermission[]
+  assignments UserRoleAssignment[]
+
+  @@unique([companyId, key])
+  @@map("roles")
+}
+
+model RolePermission {
+  roleId     String @db.Uuid
+  permission String @db.VarChar(60)
+
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permission])
+  @@map("role_permissions")
+}
+
+model UserRoleAssignment {
+  userId String @db.Uuid
+  roleId String @db.Uuid
+
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@map("user_role_assignments")
+}
+
+// --- plans and capabilities -----------------------------------------------
+
+model Plan {
+  id            String  @id @default(uuid()) @db.Uuid
+  key           String  @unique @db.VarChar(40)
+  name          String  @db.VarChar(80)
+  pricePaise    Int     @default(0)
+  billingPeriod String  @default("MONTHLY") @db.VarChar(20)
+  isActive      Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  features      PlanFeature[]
+  companies     Company[]
+  subscriptions Subscription[]
+
+  @@map("plans")
+}
+
+model PlanFeature {
+  planId     String @db.Uuid
+  capability String @db.VarChar(60)
+  /// Numeric ceiling where the capability is quantitative, e.g. warehouses.
+  limit      Int?
+
+  plan Plan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@id([planId, capability])
+  @@map("plan_features")
+}
+
+/// Per-company override, so a capability can be granted or revoked without
+/// inventing a new plan for one customer.
+model CompanyCapability {
+  companyId  String  @db.Uuid
+  capability String  @db.VarChar(60)
+  enabled    Boolean
+  limit      Int?
+  note       String? @db.Text
+
+  updatedAt DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@id([companyId, capability])
+  @@map("company_capabilities")
+}
+
+model Subscription {
+  id        String @id @default(uuid()) @db.Uuid
+  companyId String @db.Uuid
+  planId    String @db.Uuid
+
+  status           String    @default("ACTIVE") @db.VarChar(20)
+  currentPeriodEnd DateTime
+  cancelledAt      DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  plan    Plan    @relation(fields: [planId], references: [id])
+
+  @@index([companyId, status])
+  @@map("subscriptions")
 }

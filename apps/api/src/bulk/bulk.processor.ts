@@ -475,9 +475,18 @@ export class BulkProcessor {
     jobId: string,
     issue: RowIssue & { rawRow?: Record<string, string> },
   ): Promise<void> {
+    // Inherited from the parent job so an error row can never end up in a
+    // different tenant from the import that produced it.
+    const job = await this.prisma.bulkJob.findUnique({
+      where: { id: jobId },
+      select: { companyId: true },
+    })
+    if (!job) return
+
     await this.prisma.bulkJobError.create({
       data: {
         jobId,
+        companyId: job.companyId,
         rowNumber: issue.rowNumber,
         column: issue.column?.slice(0, 80) ?? null,
         value: issue.value?.slice(0, 500) ?? null,

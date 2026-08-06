@@ -11,6 +11,7 @@ import { PrismaModule } from './common/prisma/prisma.module'
 import { RedisModule } from './common/redis/redis.module'
 import { HealthModule } from './health/health.module'
 import { SearchModule } from './search/search.module'
+import { TenancyModule } from './tenancy/tenancy.module'
 import { loadEnv } from './config/env'
 
 const env = loadEnv()
@@ -51,6 +52,7 @@ const env = loadEnv()
 
     PrismaModule,
     RedisModule,
+    TenancyModule,
     AuthModule,
     BulkModule,
     HealthModule,

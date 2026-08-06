@@ -4,8 +4,9 @@
  *
  * Parts of this schema cannot be expressed in schema.prisma:
  *
- *   - `addresses.location`   GENERATED geography column + GiST index
- *   - `medicines.searchVector` GENERATED tsvector + GIN index
+ *   - `addresses.location`         GENERATED geography column + GiST index
+ *   - `medicines.searchVector`     GENERATED tsvector + GIN index
+ *   - `medicine_offers.searchVector` and its indexes (trigger-maintained)
  *   - trigram indexes for typo-tolerant search
  *   - partial indexes and CHECK constraints
  *
@@ -14,39 +15,46 @@
  * delivery-radius and search indexes — the app keeps working, just slowly and
  * wrongly, which is the worst kind of failure.
  *
- * This runs automatically as part of `npm run db:migrate`. It rewrites the
- * newest migration, commenting out the destructive statements and appending
- * idempotent re-creates as a backstop.
+ * Matching is done on OBJECT NAMES, not on whole statements. An earlier version
+ * matched exact single-line statements and missed
+ *
+ *     ALTER TABLE "addresses" ADD COLUMN "companyId" UUID,
+ *     ALTER COLUMN "location" DROP DEFAULT;
+ *
+ * because Prisma splits a multi-clause ALTER TABLE across lines. Names are what
+ * is stable; statement layout is not.
+ *
+ * Runs automatically as part of `npm run db:migrate`.
  */
 import fs from 'node:fs'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 
-const MIGRATIONS_DIR = path.resolve('apps/api/prisma/migrations')
+// Resolved from this file, not from cwd — the script is invoked from both the
+// repo root and apps/api, and silently finding no migrations is worse than
+// failing loudly.
+const HERE = path.dirname(fileURLToPath(import.meta.url))
+const MIGRATIONS_DIR = path.resolve(HERE, '..', 'apps/api/prisma/migrations')
 
-/** Statements that must never reach the database. */
-const FORBIDDEN_PATTERNS = [
-  /^DROP INDEX "addresses_location_gist_idx";$/m,
-  /^DROP INDEX "medicines_search_vector_gin_idx";$/m,
-  /^DROP INDEX "medicines_name_trgm_idx";$/m,
-  /^DROP INDEX "medicines_composition_trgm_idx";$/m,
-  /^DROP INDEX "inventory_items_sellable_idx";$/m,
-  /^DROP INDEX "stock_reservations_live_idx";$/m,
-  /^DROP INDEX "addresses_one_default_per_user";$/m,
-  /^ALTER TABLE "addresses" ALTER COLUMN "location" DROP DEFAULT;$/m,
-  /^ALTER TABLE "medicines" ALTER COLUMN "searchVector" DROP DEFAULT;$/m,
-  /^ALTER TABLE "addresses" DROP COLUMN "location";$/m,
-  /^ALTER TABLE "medicines" DROP COLUMN "searchVector";$/m,
-  // The search read model is trigger-maintained; Prisma sees its indexes and
-  // its tsvector column as drift for the same reason.
-  /^DROP INDEX "medicine_offers_distributor_price_idx";$/m,
-  /^DROP INDEX "medicine_offers_search_idx";$/m,
-  /^DROP INDEX "medicine_offers_name_trgm_idx";$/m,
-  /^DROP INDEX "medicine_offers_medicine_price_idx";$/m,
-  /^DROP INDEX "medicine_offers_distributor_expiry_idx";$/m,
-  /^ALTER TABLE "medicine_offers" ALTER COLUMN "searchVector" DROP DEFAULT;$/m,
+/** Indexes Prisma cannot express, so must never be allowed to drop. */
+const PROTECTED_INDEXES = [
+  'addresses_location_gist_idx',
+  'addresses_one_default_per_user',
+  'medicines_search_vector_gin_idx',
+  'medicines_name_trgm_idx',
+  'medicines_composition_trgm_idx',
+  'inventory_items_sellable_idx',
+  'stock_reservations_live_idx',
+  'medicine_offers_distributor_price_idx',
+  'medicine_offers_search_idx',
+  'medicine_offers_name_trgm_idx',
+  'medicine_offers_medicine_price_idx',
+  'medicine_offers_distributor_expiry_idx',
 ]
 
-/** Re-created idempotently, so a previously damaged database repairs itself. */
+/** GENERATED columns. Prisma tries to strip their expression. */
+const PROTECTED_GENERATED_COLUMNS = ['location', 'searchVector']
+
 const RESTORE_SQL = `
 -- ---------------------------------------------------------------------------
 -- Restore hand-written indexes (added by scripts/check-migration-drift.mjs).
@@ -63,34 +71,79 @@ CREATE INDEX IF NOT EXISTS "medicine_offers_medicine_price_idx" ON "medicine_off
 CREATE INDEX IF NOT EXISTS "medicine_offers_distributor_expiry_idx" ON "medicine_offers" ("distributorId", "latestExpiry" DESC);
 `
 
-function newestMigration() {
+/**
+ * The migration to check.
+ *
+ * Picked by modification time, not by name. Name order was wrong: a migration
+ * hand-written with a later timestamp than the one Prisma just generated made
+ * the guard inspect the wrong file and report "clean" while real drift sat in
+ * the new one. An explicit path can also be passed as the first argument.
+ */
+function targetMigration() {
+  const explicit = process.argv[2]
+  if (explicit) {
+    const file = explicit.endsWith('.sql') ? explicit : path.join(explicit, 'migration.sql')
+    return path.resolve(file)
+  }
   if (!fs.existsSync(MIGRATIONS_DIR)) return null
+
   const dirs = fs
     .readdirSync(MIGRATIONS_DIR)
-    .filter((name) => fs.statSync(path.join(MIGRATIONS_DIR, name)).isDirectory())
-    .sort()
-  const newest = dirs.at(-1)
-  return newest ? path.join(MIGRATIONS_DIR, newest, 'migration.sql') : null
+    .map((name) => path.join(MIGRATIONS_DIR, name))
+    .filter((full) => fs.statSync(full).isDirectory())
+    .map((full) => ({ full, mtime: fs.statSync(full).mtimeMs }))
+    .sort((a, b) => b.mtime - a.mtime)
+
+  return dirs[0] ? path.join(dirs[0].full, 'migration.sql') : null
 }
 
-const file = newestMigration()
+const file = targetMigration()
 if (!file || !fs.existsSync(file)) {
-  console.log('No migration to check.')
-  process.exit(0)
+  console.error('Drift guard: no migration found. Check the path.')
+  process.exit(1)
 }
 
-let sql = fs.readFileSync(file, 'utf8')
+const original = fs.readFileSync(file, 'utf8')
+const lines = original.split('\n')
+const output = []
 let stripped = 0
 
-for (const pattern of FORBIDDEN_PATTERNS) {
-  if (pattern.test(sql)) {
-    sql = sql.replace(
-      pattern,
-      (match) => `-- [drift-guard] removed, would destroy a hand-written object:\n-- ${match}`,
-    )
+for (let index = 0; index < lines.length; index++) {
+  const line = lines[index]
+
+  // 1. Whole-statement drops of a protected index.
+  const dropIndex = /^\s*DROP INDEX (?:IF EXISTS )?"([^"]+)"\s*;\s*$/.exec(line)
+  if (dropIndex && PROTECTED_INDEXES.includes(dropIndex[1])) {
+    output.push(`-- [drift-guard] kept: ${dropIndex[1]}`)
     stripped += 1
+    continue
   }
+
+  // 2. A clause stripping a GENERATED column's expression. It may be the only
+  //    clause, or one of several in a multi-line ALTER TABLE — so the previous
+  //    line's trailing comma has to become a semicolon when this one goes.
+  const alterColumn = /^\s*ALTER COLUMN "([^"]+)" DROP DEFAULT\s*(,|;)\s*$/.exec(line)
+  if (alterColumn && PROTECTED_GENERATED_COLUMNS.includes(alterColumn[1])) {
+    const terminator = alterColumn[2]
+    if (terminator === ';') {
+      // Last clause: the previous line ends with a comma that must now close.
+      for (let back = output.length - 1; back >= 0; back--) {
+        if (output[back].trim().endsWith(',')) {
+          output[back] = output[back].replace(/,\s*$/, ';')
+          break
+        }
+        if (output[back].trim().endsWith(';')) break
+      }
+    }
+    output.push(`-- [drift-guard] kept generated column: ${alterColumn[1]}`)
+    stripped += 1
+    continue
+  }
+
+  output.push(line)
 }
+
+let sql = output.join('\n')
 
 if (stripped > 0) {
   if (!sql.includes('drift-guard restore')) {
@@ -100,7 +153,6 @@ if (stripped > 0) {
   console.log(
     `Drift guard: removed ${stripped} destructive statement(s) from ${path.basename(path.dirname(file))}`,
   )
-  console.log('  (Prisma cannot see the generated columns and custom indexes.)')
 } else {
   console.log('Drift guard: migration is clean.')
 }

@@ -113,6 +113,7 @@ export class AuthService {
    */
   private toSessionUser(user: {
     id: string
+    companyId: string | null
     fullName: string
     phone: string
     email: string
@@ -133,6 +134,7 @@ export class AuthService {
 
     return {
       id: user.id,
+      companyId: user.companyId ?? null,
       fullName: user.fullName,
       phone: user.phone,
       email: user.email,

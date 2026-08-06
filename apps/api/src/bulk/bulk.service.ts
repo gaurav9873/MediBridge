@@ -87,6 +87,10 @@ export class BulkService {
         type,
         status: BulkJobStatus.PENDING,
         createdById: user.id,
+        // Taken from the signed-in user's company, never from the request.
+        // Non-null because an import always belongs to exactly one tenant;
+        // the platform owner imports into the global catalogue explicitly.
+        companyId: requireCompany(user),
         scopeId: distributorId ?? null,
         fileKey: 'pending',
         fileName: file.originalname.slice(0, 255),
@@ -279,6 +283,16 @@ export class BulkService {
     if (!profile) throw new AppException(ApiErrorCode.FORBIDDEN)
     return profile.id
   }
+}
+
+/** An import must have a tenant. The platform owner picks one explicitly. */
+function requireCompany(user: SessionUser): string {
+  if (!user.companyId) {
+    throw new AppException(ApiErrorCode.VALIDATION_FAILED, {
+      fields: [{ field: 'company', message: 'Choose which company to import into.' }],
+    })
+  }
+  return user.companyId
 }
 
 function extensionOf(fileName: string): string {

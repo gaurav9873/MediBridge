@@ -41,10 +41,63 @@ function monthsFromNow(months: number): Date {
   return date
 }
 
+/**
+ * Tenant #1 — the platform owner's own distribution business.
+ *
+ * Running our own business as an ordinary tenant is the only reliable way to
+ * keep the white-label path honest: anything broken for tenant #1 is broken
+ * for every customer we sell to.
+ */
+let COMPANY_ID = ''
+
+async function seedCompany(): Promise<void> {
+  const plan = await prisma.plan.upsert({
+    where: { key: 'ENTERPRISE' },
+    update: {},
+    create: { key: 'ENTERPRISE', name: 'Enterprise', pricePaise: 0, billingPeriod: 'MONTHLY' },
+  })
+
+  const company = await prisma.company.create({
+    data: {
+      name: 'MediBridge',
+      slug: 'medibridge',
+      status: 'ACTIVE',
+      // Marketplace: this tenant's customers may buy from linked sellers.
+      businessMode: 'MARKETPLACE',
+      paymentTermType: 'TOKEN_PLUS_COD',
+      tokenPercent: 20,
+      planId: plan.id,
+      brandColor: '#0d7490',
+    },
+  })
+  COMPANY_ID = company.id
+
+  // A second tenant in the other mode, so both paths have real data to
+  // exercise and cross-tenant isolation can actually be tested.
+  await prisma.company.create({
+    data: {
+      name: 'HealthPlus Distributors',
+      slug: 'healthplus',
+      status: 'ACTIVE',
+      businessMode: 'PRIVATE_DISTRIBUTOR',
+      paymentTermType: 'CREDIT',
+      creditDays: 15,
+      planId: plan.id,
+      brandColor: '#7c3aed',
+    },
+  })
+
+  console.log('  MediBridge          MARKETPLACE, 20% token')
+  console.log('  HealthPlus          PRIVATE_DISTRIBUTOR, 15-day credit')
+}
+
 async function clearAll(): Promise<void> {
   // Order matters: children before parents.
   await prisma.$executeRawUnsafe(`
     TRUNCATE TABLE
+      "company_capabilities", "subscriptions", "plan_features", "plans",
+      "user_role_assignments", "role_permissions", "roles",
+      "customers", "warehouses", "company_links", "companies",
       "settlement_items", "settlements", "refunds", "payments",
       "problem_reports", "deliveries", "order_status_history", "order_items",
       "orders", "order_groups", "cart_items", "carts",
@@ -147,6 +200,7 @@ async function createUserWithAddress(params: {
       phone: params.phone,
       email: params.email,
       passwordHash,
+      companyId: COMPANY_ID,
       fullName: params.fullName,
       role: params.role,
       accountStatus: 'ACTIVE',
@@ -160,6 +214,7 @@ async function createUserWithAddress(params: {
   const address = await prisma.address.create({
     data: {
       userId: user.id,
+      companyId: COMPANY_ID,
       label: params.address.label,
       line1: params.address.line1,
       city: params.address.city,
@@ -188,6 +243,7 @@ async function approveDocuments(params: {
     data: [
       {
         userId: params.userId,
+        companyId: COMPANY_ID,
         type: 'DRUG_LICENSE',
         number: params.licenseNumber,
         expiresOn: params.expiresOn,
@@ -201,6 +257,7 @@ async function approveDocuments(params: {
       },
       {
         userId: params.userId,
+        companyId: COMPANY_ID,
         type: 'GST_CERTIFICATE',
         number: params.gstNumber,
         fileKey: `seed/gst/${params.userId}.pdf`,
@@ -220,6 +277,9 @@ async function main(): Promise<void> {
 
   await clearAll()
   console.log('Cleared existing data')
+
+  console.log('\nCompanies (tenants)')
+  await seedCompany()
 
   console.log('\nSettings')
   await seedSettings()
@@ -411,6 +471,7 @@ async function main(): Promise<void> {
     data: [
       {
         userId: pending.userId,
+        companyId: COMPANY_ID,
         type: 'DRUG_LICENSE',
         number: 'MH-THN-20-998877',
         expiresOn: monthsFromNow(20),
@@ -422,6 +483,7 @@ async function main(): Promise<void> {
       },
       {
         userId: pending.userId,
+        companyId: COMPANY_ID,
         type: 'GST_CERTIFICATE',
         number: '27AAFCN1122L1ZP',
         fileKey: `seed/gst/${pending.userId}.pdf`,
@@ -892,6 +954,7 @@ async function main(): Promise<void> {
       await prisma.inventoryItem.create({
         data: {
           distributorId,
+          companyId: COMPANY_ID,
           medicineId: medicine.id,
           batchNumber: row.batch,
           expiryDate: monthsFromNow(row.expiryMonths),

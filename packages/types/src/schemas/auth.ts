@@ -136,6 +136,11 @@ export interface AuthTokens {
 /** The signed-in user, as the web app holds it. */
 export interface SessionUser {
   id: string
+  /**
+   * The tenant this user acts for. Null only for the platform owner.
+   * Always resolved from the session, never from the request.
+   */
+  companyId: string | null
   fullName: string
   phone: string
   email: string
