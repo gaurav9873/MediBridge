@@ -1,8 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common'
 import { ApiErrorCode, type SessionUser, type SignInInput, UserRole } from '@medibridge/types'
-import argon2 from 'argon2'
+import { AuthMethod } from '@medibridge/types'
 import { AppException } from '../common/errors/app-exception'
 import { PrismaService } from '../common/prisma/prisma.service'
+import { AuthProviderRegistry } from './providers/auth-provider.registry'
 import { TokenService } from './token.service'
 
 @Injectable()
@@ -12,6 +13,7 @@ export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly tokens: TokenService,
+    private readonly providers: AuthProviderRegistry,
   ) {}
 
   /**
@@ -23,36 +25,54 @@ export class AuthService {
    */
   async signIn(
     input: SignInInput,
-    context: { userAgent?: string; ipAddress?: string; requiredRole?: UserRole },
+    context: {
+      userAgent?: string
+      ipAddress?: string
+      requiredRole?: UserRole
+      companyId?: string | null
+      /** Defaults to PASSWORD, so existing callers are unaffected. */
+      method?: AuthMethod
+    },
   ): Promise<{ user: SessionUser; accessToken: string; refreshToken: string }> {
+    /*
+     * Three steps, the same for every login method:
+     *   1. a provider says WHICH user this is
+     *   2. the access rules below decide whether they may sign in
+     *   3. a session is issued
+     *
+     * Adding Google or SSO changes only step 1. The rules in step 2 are
+     * written once here rather than once per provider, which is what stops a
+     * new login method quietly skipping the suspension or tenant check.
+     */
+    const identity = await this.providers.identify(
+      {
+        method: context.method ?? AuthMethod.PASSWORD,
+        identifier: input.phone,
+        secret: input.password,
+      },
+      context.companyId ?? null,
+    )
+
     const user = await this.prisma.user.findFirst({
-      where: { phone: input.phone, deletedAt: null },
+      where: { id: identity.userId, deletedAt: null },
       include: { retailerProfile: true, distributorProfile: true },
     })
-
-    if (!user) {
-      // Hash anyway so a missing account does not answer measurably faster
-      // than a wrong password.
-      await argon2.hash(input.password).catch(() => undefined)
-      throw new AppException(ApiErrorCode.INVALID_CREDENTIALS)
-    }
-
-    const passwordMatches = await argon2
-      .verify(user.passwordHash, input.password)
-      .catch(() => false)
-    if (!passwordMatches) {
-      throw new AppException(ApiErrorCode.INVALID_CREDENTIALS)
-    }
+    if (!user) throw new AppException(ApiErrorCode.INVALID_CREDENTIALS)
 
     if (user.accountStatus === 'SUSPENDED') {
       throw new AppException(ApiErrorCode.ACCOUNT_SUSPENDED)
     }
 
     /*
-     * Role gate for the admin sign-in page. A retailer typing their details
-     * into /admin/login gets the same generic error rather than "wrong portal",
-     * which would confirm their account exists.
+     * Tenant check. Signing in on one company's portal with another company's
+     * account gives the same generic error as a wrong password — otherwise the
+     * login page becomes a way to discover which accounts exist where.
      */
+    if (context.companyId && user.companyId && user.companyId !== context.companyId) {
+      this.logger.warn(`Cross-tenant sign-in blocked: ${user.id} on ${context.companyId}`)
+      throw new AppException(ApiErrorCode.INVALID_CREDENTIALS)
+    }
+
     if (context.requiredRole && user.role !== context.requiredRole) {
       this.logger.warn(
         `Role mismatch on sign-in: ${user.id} tried a ${context.requiredRole} portal`,

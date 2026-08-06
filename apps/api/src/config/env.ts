@@ -22,6 +22,11 @@ const envSchema = z.object({
   JWT_ACCESS_TTL: z.string().default('15m'),
   JWT_REFRESH_TTL: z.string().default('30d'),
 
+  /** e.g. "medibridge.in" — the suffix the SubdomainStrategy strips. */
+  TENANT_BASE_DOMAIN: z.string().default(''),
+  /** Single-tenant deployments name their one company here. */
+  DEFAULT_TENANT_SLUG: z.string().default(''),
+
   DEFAULT_DELIVERY_RADIUS_KM: z.coerce.number().int().min(1).max(200).default(25),
   DEFAULT_TOKEN_PERCENT: z.coerce.number().int().min(1).max(100).default(20),
   DEFAULT_SAME_DAY_CUTOFF: z.string().default('14:00'),

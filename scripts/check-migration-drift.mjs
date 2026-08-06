@@ -119,9 +119,18 @@ for (let index = 0; index < lines.length; index++) {
     continue
   }
 
-  // 2. A clause stripping a GENERATED column's expression. It may be the only
-  //    clause, or one of several in a multi-line ALTER TABLE — so the previous
-  //    line's trailing comma has to become a semicolon when this one goes.
+  // 2a. A complete single-line statement stripping a GENERATED column.
+  //     Prisma emits this form when the column is the table's only change.
+  const wholeStatement =
+    /^\s*ALTER TABLE "[^"]+" ALTER COLUMN "([^"]+)" DROP DEFAULT\s*;\s*$/.exec(line)
+  if (wholeStatement && PROTECTED_GENERATED_COLUMNS.includes(wholeStatement[1])) {
+    output.push(`-- [drift-guard] kept generated column: ${wholeStatement[1]}`)
+    stripped += 1
+    continue
+  }
+
+  // 2b. The same thing as one clause of a multi-line ALTER TABLE — so the
+  //     previous line's trailing comma has to become a semicolon when it goes.
   const alterColumn = /^\s*ALTER COLUMN "([^"]+)" DROP DEFAULT\s*(,|;)\s*$/.exec(line)
   if (alterColumn && PROTECTED_GENERATED_COLUMNS.includes(alterColumn[1])) {
     const terminator = alterColumn[2]

@@ -250,6 +250,7 @@ model User {
   bulkJobs           BulkJob[]
   customerProfile    Customer?
   roleAssignments    UserRoleAssignment[]
+  identities         UserIdentity[]
 
   @@index([role, accountStatus])
   @@index([deletedAt])
@@ -1308,6 +1309,7 @@ model Company {
   roles         Role[]
   subscriptions Subscription[]
   overrides     CompanyCapability[]
+  authMethods   CompanyAuthMethod[]
   /// Marketplace mode: the seller companies whose catalogue this portal shows.
   sellerLinks   CompanyLink[]       @relation("MarketplaceOperator")
   marketplaces  CompanyLink[]       @relation("SellerCompany")
@@ -1535,4 +1537,54 @@ model Subscription {
 
   @@index([companyId, status])
   @@map("subscriptions")
+}
+
+/// One way a user can prove who they are.
+///
+/// Passwords used to live on User, which quietly assumed one login method
+/// forever. A user now has many identities — a password today, Google
+/// tomorrow, an SSO subject after that — and adding a method is a new row
+/// type, not a schema change.
+model UserIdentity {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  /// Matches AuthMethod in @medibridge/types.
+  method String @db.VarChar(30)
+
+  /// What the provider knows this user as: the mobile number, the email, the
+  /// Google `sub`, the SSO subject. Unique per method.
+  identifier String @db.VarChar(255)
+  /// Argon2 hash for password methods; null for federated ones, where the
+  /// identity provider holds the secret.
+  secretHash String? @db.VarChar(255)
+
+  /// The provider vouches for this identifier (a verified Google email).
+  isVerified Boolean   @default(false)
+  lastUsedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([method, identifier])
+  @@index([userId])
+  @@map("user_identities")
+}
+
+/// Which sign-in methods a tenant offers, and their configuration.
+/// One company may require SSO while another allows mobile + OTP.
+model CompanyAuthMethod {
+  companyId String @db.Uuid
+  method    String @db.VarChar(30)
+  isEnabled Boolean @default(true)
+  /// Provider settings: OIDC issuer, client id, allowed email domains.
+  config    Json?
+
+  updatedAt DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@id([companyId, method])
+  @@map("company_auth_methods")
 }
