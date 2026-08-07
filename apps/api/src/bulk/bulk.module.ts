@@ -7,7 +7,7 @@ import { InventoryStockUpdateHandler } from './handlers/inventory-stock-update.h
 import { MedicineImportHandler } from './handlers/medicine-import.handler'
 import { BulkHandlerRegistry } from './handlers/registry'
 import { ReportWriter } from './parsing/report-writer'
-import { FileStorage } from './storage/file-storage'
+import { FileStorage } from '../common/storage/file-storage'
 
 /**
  * The bulk platform.

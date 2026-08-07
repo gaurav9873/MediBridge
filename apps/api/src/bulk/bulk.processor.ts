@@ -5,7 +5,7 @@ import type { AnyBulkHandler, BulkScope, ParsedRow } from './handlers/bulk-handl
 import { BulkHandlerRegistry } from './handlers/registry'
 import { batched, openRowReader } from './parsing/row-reader'
 import { ReportWriter } from './parsing/report-writer'
-import { FileStorage } from './storage/file-storage'
+import { FileStorage } from '../common/storage/file-storage'
 
 /**
  * The two-pass engine.

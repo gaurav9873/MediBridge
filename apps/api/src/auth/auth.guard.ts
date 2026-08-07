@@ -9,6 +9,7 @@ import { Reflector } from '@nestjs/core'
 import { ApiErrorCode, type SessionUser, type UserRole } from '@medibridge/types'
 import type { Request } from 'express'
 import { AppException } from '../common/errors/app-exception'
+import { CompanyLinkService } from '../tenancy/company-link.service'
 import { TenantContextService } from '../tenancy/tenant-context'
 import { AuthService } from './auth.service'
 import { TokenService } from './token.service'
@@ -52,6 +53,7 @@ export class AuthGuard implements CanActivate {
     private readonly tokens: TokenService,
     private readonly auth: AuthService,
     private readonly tenant: TenantContextService,
+    private readonly links: CompanyLinkService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -90,11 +92,16 @@ export class AuthGuard implements CanActivate {
     const tenantContext = this.tenant.get()
     if (tenantContext) {
       if (tenantContext.companyId && user.companyId && tenantContext.companyId !== user.companyId) {
-        // The portal says one tenant, the session says another. Refuse rather
-        // than silently preferring one.
-        throw new AppException(ApiErrorCode.FORBIDDEN)
+        // A seller trading through this marketplace may use its portal. Anyone
+        // else whose session says a different tenant is refused rather than
+        // silently preferred.
+        if (!(await this.links.mayUsePortal(tenantContext.companyId, user.companyId))) {
+          throw new AppException(ApiErrorCode.FORBIDDEN)
+        }
       }
-      tenantContext.companyId = tenantContext.companyId ?? user.companyId
+      // The session decides what the request may READ. A seller signing in
+      // through the marketplace still sees only its own rows.
+      tenantContext.companyId = user.companyId ?? tenantContext.companyId
       tenantContext.isPlatformOwner = user.companyId === null && user.role === 'ADMIN'
     }
 

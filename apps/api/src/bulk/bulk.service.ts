@@ -19,7 +19,7 @@ import { TenantPrismaService } from '../tenancy/tenant-prisma.service'
 import { BulkQueue } from './bulk.queue'
 import { BulkHandlerRegistry } from './handlers/registry'
 import { ReportWriter } from './parsing/report-writer'
-import { FileStorage } from './storage/file-storage'
+import { FileStorage } from '../common/storage/file-storage'
 
 @Injectable()
 export class BulkService {

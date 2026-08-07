@@ -152,3 +152,28 @@ export interface SessionUser {
   /** Drives the licence-expiry warning banner. */
   licenseExpiresOn: string | null
 }
+
+/**
+ * Uploading a licence or GST certificate.
+ *
+ * The file itself is multipart, so only the fields beside it are described
+ * here. `expiresOn` is optional because a GST certificate does not expire —
+ * the service refuses a drug licence without one.
+ */
+export const uploadDocumentSchema = z.object({
+  type: z.enum(['DRUG_LICENSE', 'GST_CERTIFICATE'], {
+    error: v.selectRequired('document type'),
+  }),
+  number: z.string().trim().min(3, v.requiredNamed('document number')).max(60, v.text.tooLong(60)),
+  expiresOn: z.coerce.date(v.date.invalid).optional(),
+})
+export type UploadDocumentInput = z.infer<typeof uploadDocumentSchema>
+
+/** Adding a colleague to your own company. */
+export const employeeInviteSchema = z.object({
+  fullName: z.string().trim().min(2, v.requiredNamed('full name')).max(120, v.text.tooLong(120)),
+  phone: mobileSchema,
+  email: emailSchema,
+  roleKey: z.string().trim().min(1, v.selectRequired('role')),
+})
+export type EmployeeInviteInput = z.infer<typeof employeeInviteSchema>

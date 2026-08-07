@@ -39,6 +39,21 @@ const check = (name, actual, expected) => {
   console.log(`  ${mark}  ${name.padEnd(52)} ${detail}`)
 }
 
+/**
+ * The truth, read with RLS deliberately bypassed.
+ *
+ * Used only to compute what a tenant SHOULD see, so every assertion compares
+ * two live numbers rather than one live number and a hardcoded fixture that
+ * goes stale the first time someone adds test data.
+ */
+async function expected(client, sql) {
+  await client.query('BEGIN')
+  await client.query("SELECT set_config('app.bypass_rls', 'on', true)")
+  const { rows } = await client.query(sql)
+  await client.query('COMMIT')
+  return Number(rows[0].count)
+}
+
 /** Runs `sql` with one tenant applied, exactly as TenantPrismaService does. */
 async function asTenant(client, companyId, sql) {
   await client.query('BEGIN')
@@ -111,30 +126,26 @@ async function main() {
 
   console.log('\nOne seller cannot read another\n')
 
-  const medplusStock = await asTenant(
-    client,
-    id['medplus-wholesale'],
-    'SELECT count(*) FROM inventory_items',
-  )
-  const wellnessStock = await asTenant(
-    client,
-    id['wellness-distributors'],
-    'SELECT count(*) FROM inventory_items',
-  )
-  check('MedPlus sees only its own batches', medplusStock, 20)
-  check('Wellness sees only its own batches', wellnessStock, 18)
+  // Expectations are derived, not hardcoded: this asserts the RULE, so adding
+  // a seller or importing stock cannot turn a passing suite red for no reason.
+  for (const slug of ['medplus-wholesale', 'wellness-distributors']) {
+    const owned = await expected(client, `SELECT count(*) FROM inventory_items WHERE "companyId" = '${id[slug]}'`)
+    const visible = await asTenant(client, id[slug], 'SELECT count(*) FROM inventory_items')
+    check(`${slug} sees its own batches and no others`, visible, owned)
+  }
 
   console.log('\nA marketplace reads its sellers\' shop window, not their books\n')
 
+  const linked = `SELECT "sellerId" FROM company_links WHERE "marketplaceId" = '${id.medibridge}' AND "isActive"`
   check(
-    'marketplace sees every linked offer',
+    'marketplace sees every linked seller offer',
     await asTenant(client, id.medibridge, 'SELECT count(*) FROM medicine_offers'),
-    38,
+    await expected(client, `SELECT count(*) FROM medicine_offers WHERE "companyId" IN (${linked})`),
   )
   check(
-    'marketplace sees linked warehouses',
+    'marketplace sees every linked seller warehouse',
     await asTenant(client, id.medibridge, 'SELECT count(*) FROM warehouses'),
-    2,
+    await expected(client, `SELECT count(*) FROM warehouses WHERE "companyId" IN (${linked})`),
   )
   // The line between a shop window and a ledger: offers are public, the
   // batches, costs and expiries behind them are not.
@@ -169,7 +180,7 @@ async function main() {
   const readable = await client.query('SELECT count(*) FROM medicine_offers')
   const writable = await client.query('UPDATE medicine_offers SET "bestPricePaise" = 1')
   await client.query('ROLLBACK')
-  check('marketplace reads seller offers', Number(readable.rows[0].count), 38)
+  check('marketplace can read seller offers at all', Number(readable.rows[0].count) > 0, true)
   check('marketplace cannot write seller offers', writable.rowCount, 0)
 
   await client.end()

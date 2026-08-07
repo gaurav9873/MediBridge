@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common'
 import { ApiErrorCode, type SessionUser, type SignInInput, UserRole } from '@medibridge/types'
 import { AuthMethod } from '@medibridge/types'
 import { AppException } from '../common/errors/app-exception'
+import { CompanyLinkService } from '../tenancy/company-link.service'
 import { TenantPrismaService } from '../tenancy/tenant-prisma.service'
 import { AuthProviderRegistry } from './providers/auth-provider.registry'
 import { TokenService } from './token.service'
@@ -12,6 +13,7 @@ export class AuthService {
 
   constructor(
     private readonly db: TenantPrismaService,
+    private readonly links: CompanyLinkService,
     private readonly tokens: TokenService,
     private readonly providers: AuthProviderRegistry,
   ) {}
@@ -70,7 +72,11 @@ export class AuthService {
      * account gives the same generic error as a wrong password — otherwise the
      * login page becomes a way to discover which accounts exist where.
      */
-    if (context.companyId && user.companyId && user.companyId !== context.companyId) {
+    if (
+      context.companyId &&
+      user.companyId &&
+      !(await this.links.mayUsePortal(context.companyId, user.companyId))
+    ) {
       this.logger.warn(`Cross-tenant sign-in blocked: ${user.id} on ${context.companyId}`)
       throw new AppException(ApiErrorCode.INVALID_CREDENTIALS)
     }

@@ -1,4 +1,5 @@
 import { Global, Module } from '@nestjs/common'
+import { CompanyLinkService } from './company-link.service'
 import { CapabilityService } from './capability.service'
 import { TenantController } from './tenant.controller'
 import { TenantMiddleware } from './tenant.middleware'
@@ -17,6 +18,7 @@ import { TenantResolverService } from './tenant-resolver.service'
     TenantContextService,
     TenantPrismaService,
     CapabilityService,
+    CompanyLinkService,
     TenantResolverService,
     TenantMiddleware,
   ],
@@ -24,6 +26,7 @@ import { TenantResolverService } from './tenant-resolver.service'
     TenantContextService,
     TenantPrismaService,
     CapabilityService,
+    CompanyLinkService,
     TenantResolverService,
     TenantMiddleware,
   ],

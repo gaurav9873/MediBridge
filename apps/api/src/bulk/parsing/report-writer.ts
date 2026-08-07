@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common'
 import { type ColumnSpec, ERROR_COLUMN_HEADER } from '@medibridge/types'
 import ExcelJS from 'exceljs'
 import { format as formatCsv } from 'fast-csv'
-import { FileStorage } from '../storage/file-storage'
+import { FileStorage } from '../../common/storage/file-storage'
 
 /**
  * Generates the three files the wizard hands back: the blank template, the
