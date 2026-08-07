@@ -176,6 +176,40 @@ export const account = {
     } satisfies EmptyState,
   },
 
+  /** Staff who work for this business, each with their own sign-in. */
+  team: {
+    page: {
+      title: 'Your Team',
+      subtitle: 'Give each person their own sign-in, so you can see who did what.',
+    } satisfies PageMeta,
+    help: {
+      whatIsThis:
+        'Add the people who work with you. Each one signs in with their own mobile number, so every order and every stock change is recorded against the person who made it.',
+      topics: [
+        {
+          question: 'Why not just share one password?',
+          answer:
+            'If everyone uses one login, the records only ever show your name. When a customer asks who packed an order, or a batch goes missing, there is no way to find out.',
+        },
+        {
+          question: 'What password does my colleague use?',
+          answer:
+            'We create a temporary one and show it to you once. Write it down and give it to them. Ask them to change it from their own account page after they sign in.',
+        },
+        {
+          question: 'What happens when someone leaves?',
+          answer:
+            'Remove them here. They are signed out immediately and cannot sign in again. Their name stays on the orders they handled, which is what the records are for.',
+        },
+        {
+          question: 'Which role should I choose?',
+          answer:
+            'Pick the one closest to what they actually do. Company Admin can do everything, including adding more people — give it out sparingly.',
+        },
+      ],
+    } satisfies PageHelp,
+  },
+
   security: {
     fields: {
       currentPassword: {

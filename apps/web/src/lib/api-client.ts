@@ -43,16 +43,21 @@ interface RequestOptions extends Omit<RequestInit, 'body'> {
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { body, auth = true, headers, ...rest } = options
 
+  // A file upload is FormData, and the browser must set Content-Type itself so
+  // it can add the multipart boundary. Setting it here would break the upload
+  // in a way that looks like a server bug.
+  const isForm = typeof FormData !== 'undefined' && body instanceof FormData
+
   let response: Response
   try {
     response = await fetch(`${BASE_URL}${path}`, {
       ...rest,
       headers: {
-        'Content-Type': 'application/json',
+        ...(isForm ? {} : { 'Content-Type': 'application/json' }),
         ...(headers ?? {}),
       },
       credentials: auth ? 'include' : 'omit',
-      body: body === undefined ? undefined : JSON.stringify(body),
+      body: body === undefined ? undefined : isForm ? (body as FormData) : JSON.stringify(body),
     })
   } catch {
     // The network never reached us — offline, DNS, CORS.
@@ -102,6 +107,9 @@ export const api = {
     request<T>(path, { ...options, method: 'PUT', body }),
   delete: <T>(path: string, options?: RequestOptions) =>
     request<T>(path, { ...options, method: 'DELETE' }),
+  /** Multipart upload. The browser sets the Content-Type and boundary. */
+  postForm: <T>(path: string, body: FormData, options?: RequestOptions) =>
+    request<T>(path, { ...options, method: 'POST', body }),
 }
 
 /**

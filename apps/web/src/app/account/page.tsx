@@ -2,7 +2,7 @@
 
 import { copy } from '@medibridge/copy'
 import { Alert, Button, Card, CardBody, CardHeader, PageShell, Skeleton } from '@medibridge/ui'
-import { LogOut } from 'lucide-react'
+import { LogOut, Users } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import * as React from 'react'
 import { AccountSessions } from '@/components/account-sessions'
@@ -90,6 +90,23 @@ export default function AccountPage(): React.JSX.Element {
                 </div>
               ))}
             </dl>
+          </CardBody>
+        </Card>
+
+        {/* The way out of a half-finished account, next to the alert that
+            says it is half-finished. */}
+        {user.accountStatus !== 'ACTIVE' ? (
+          <Button variant="primary" onClick={() => router.push('/onboarding')}>
+            Finish setting up my account
+          </Button>
+        ) : null}
+
+        <Card>
+          <CardHeader title="Your team" description="Give each person their own sign-in." />
+          <CardBody>
+            <Button variant="secondary" icon={<Users />} onClick={() => router.push('/account/team')}>
+              Manage team
+            </Button>
           </CardBody>
         </Card>
 

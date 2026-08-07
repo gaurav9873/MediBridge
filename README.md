@@ -179,7 +179,7 @@ These were taken as the recommended defaults for the MVP and can be revisited:
 | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Foundation v1.0** | Multi-tenancy, RLS, tenant context, pluggable auth, permissions, bulk engine, search. **Complete — see [FOUNDATION-CHECKLIST.md](docs/FOUNDATION-CHECKLIST.md)**. Put its verification commands in CI before starting Phase 2. |
 | ~~Phase 2.1~~       | ~~Authentication completion~~ — **done**. OTP sign-in, sign-up with phone confirmation, password reset, session management. See [AUTHENTICATION.md](docs/AUTHENTICATION.md) |
-| **Phase 2.2**       | Registration & onboarding — company, customer, employee                                                                                                                      |
+| ~~Phase 2.2~~       | ~~Registration & onboarding~~ — **done**. Business details, documents, seller tenants, employees. See [ONBOARDING.md](docs/ONBOARDING.md) |
 | **Phase 2.3**       | Company setup wizard — profile, warehouses, settings, payment terms, branding                                                                                                |
 | **Phase 2.4**       | Licence verification — upload, review, approve/reject, expiry                                                                                                                |
 | **Phase 2.5**       | Roles & permissions UI                                                                                                                                                       |
