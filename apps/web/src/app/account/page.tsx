@@ -5,6 +5,7 @@ import { Alert, Button, Card, CardBody, CardHeader, PageShell, Skeleton } from '
 import { LogOut } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import * as React from 'react'
+import { AccountSessions } from '@/components/account-sessions'
 import { useSession, useSignOut } from '@/lib/use-session'
 
 /**
@@ -91,6 +92,8 @@ export default function AccountPage(): React.JSX.Element {
             </dl>
           </CardBody>
         </Card>
+
+        <AccountSessions />
 
         <Card>
           <CardHeader

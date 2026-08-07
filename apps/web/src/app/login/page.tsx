@@ -89,11 +89,37 @@ export default function LoginPage(): React.JSX.Element {
               <Button type="submit" size="lg" fullWidth loading={signIn.isPending}>
                 {c.submit}
               </Button>
+
+              {/* Both routes out of a forgotten password, next to the box that
+                  just failed rather than buried in the help panel. */}
+              <div className="flex flex-col items-center gap-2 text-sm">
+                <Link
+                  href="/forgot-password"
+                  className="font-medium text-brand-600 underline underline-offset-4 dark:text-brand-400"
+                >
+                  {c.forgotPassword}
+                </Link>
+                <Link
+                  href="/login/otp"
+                  className="font-medium text-brand-600 underline underline-offset-4 dark:text-brand-400"
+                >
+                  {c.useOtpInstead}
+                </Link>
+              </div>
             </form>
           </CardBody>
         </Card>
 
         <div className="mt-5 flex flex-col items-center gap-3">
+          <p className="text-center text-sm text-content-secondary">
+            {c.noAccount}{' '}
+            <Link
+              href="/signup"
+              className="font-medium text-brand-600 underline underline-offset-4 dark:text-brand-400"
+            >
+              {c.createAccount}
+            </Link>
+          </p>
           <p className="text-center text-sm text-content-secondary">
             MediBridge staff?{' '}
             <Link

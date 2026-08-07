@@ -56,7 +56,8 @@ export const validation = {
     invalid: 'Please enter the 6-digit code we sent you.',
     incorrect: 'That code is not correct. Please check and try again.',
     expired: 'That code has expired. Please request a new one.',
-    tooManyAttempts: 'Too many incorrect attempts. Please wait 15 minutes and try again.',
+    tooManyAttempts: 'Too many incorrect attempts. Please ask for a new code.',
+    resendTooSoon: 'Please wait a moment before asking for a new code.',
   },
 
   /** India-specific business identifiers. */

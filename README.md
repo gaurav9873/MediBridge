@@ -67,6 +67,7 @@ Every seeded account uses the password **`Medibridge@123`** and signs in with a
 | `npm run db:seed`           | Reset and reseed development data               |
 | `npm run db:studio`         | Browse the database in Prisma Studio            |
 | `npm run verify:isolation`  | Prove tenant isolation as the application role  |
+| `npm run test`              | Unit tests for the business rules                |
 | `npm run db:reset`          | Destroy the containers and volumes, start fresh |
 
 ---
@@ -177,7 +178,7 @@ These were taken as the recommended defaults for the MVP and can be revisited:
 | Stage               | Scope                                                                                                                                                                        |
 | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Foundation v1.0** | Multi-tenancy, RLS, tenant context, pluggable auth, permissions, bulk engine, search. **Complete — see [FOUNDATION-CHECKLIST.md](docs/FOUNDATION-CHECKLIST.md)**. Put its verification commands in CI before starting Phase 2. |
-| **Phase 2.1**       | Authentication completion — OTP, sign-up, password reset, login UX, sessions                                                                                                 |
+| ~~Phase 2.1~~       | ~~Authentication completion~~ — **done**. OTP sign-in, sign-up with phone confirmation, password reset, session management. See [AUTHENTICATION.md](docs/AUTHENTICATION.md) |
 | **Phase 2.2**       | Registration & onboarding — company, customer, employee                                                                                                                      |
 | **Phase 2.3**       | Company setup wizard — profile, warehouses, settings, payment terms, branding                                                                                                |
 | **Phase 2.4**       | Licence verification — upload, review, approve/reject, expiry                                                                                                                |

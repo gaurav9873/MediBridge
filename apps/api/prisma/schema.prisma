@@ -230,6 +230,7 @@ model User {
   addresses          Address[]
   documents          Document[]
   refreshTokens      RefreshToken[]
+  challenges         VerificationChallenge[]
   cart               Cart?
   orderGroups        OrderGroup[]
   retailerOrders     Order[]                  @relation("RetailerOrders")
@@ -334,6 +335,48 @@ model Address {
 
 /// Rotating refresh tokens. Kept in Postgres rather than Redis so that
 /// "sign out everywhere" and session auditing survive a cache flush.
+/// A short-lived code sent out of band: OTP sign-in, phone confirmation,
+/// password reset. One table because all three are the same rule — prove you
+/// control an identifier, once, within a few minutes. See ChallengePurpose.
+///
+/// No companyId, and therefore no RLS: a challenge is issued before anyone
+/// knows which tenant the request belongs to, exactly like user_identities.
+model VerificationChallenge {
+  id String @id @default(uuid()) @db.Uuid
+
+  /// Matches ChallengePurpose in @medibridge/types. A reset code cannot be
+  /// spent to sign in, because verification always names the purpose it wants.
+  purpose String @db.VarChar(30)
+  /// The mobile number or email the code went to.
+  identifier String @db.VarChar(255)
+  /// SHA-256 of the six digits. The code itself is never stored, so a database
+  /// leak does not hand over live codes.
+  codeHash String @db.VarChar(64)
+
+  expiresAt DateTime
+  /// Wrong guesses so far. The challenge dies at CHALLENGE_MAX_ATTEMPTS,
+  /// which is what stops a brute force of the 10^6 space.
+  attempts   Int       @default(0)
+  /// Set the moment it is spent. Single use is enforced here, not by deletion,
+  /// so a replayed code is distinguishable from an expired one.
+  consumedAt DateTime?
+
+  /// Known for reset and re-verification; null when signing up, because the
+  /// user does not exist yet.
+  userId    String? @db.Uuid
+  ipAddress String? @db.VarChar(45)
+
+  createdAt DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// The lookup every verification does: newest live challenge for this
+  /// identifier and purpose.
+  @@index([purpose, identifier, consumedAt])
+  @@index([expiresAt])
+  @@map("verification_challenges")
+}
+
 model RefreshToken {
   id        String   @id @default(uuid()) @db.Uuid
   userId    String   @db.Uuid

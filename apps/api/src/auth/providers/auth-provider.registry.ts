@@ -8,6 +8,7 @@ import {
 } from '@medibridge/types'
 import { AppException } from '../../common/errors/app-exception'
 import { TenantPrismaService } from '../../tenancy/tenant-prisma.service'
+import { OtpProvider } from './otp.provider'
 import { PasswordProvider } from './password.provider'
 
 /**
@@ -31,8 +32,12 @@ export class AuthProviderRegistry {
   constructor(
     private readonly db: TenantPrismaService,
     password: PasswordProvider,
+    otp: OtpProvider,
   ) {
+    // Adding a login method is this line and one class. Nothing downstream —
+    // session issuance, guards, the tenant check — knows the difference.
     this.register(password)
+    this.register(otp)
   }
 
   private register(provider: AuthProviderContract): void {

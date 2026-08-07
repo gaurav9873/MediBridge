@@ -45,6 +45,14 @@ export class TokenService {
     return this.jwt.verify<AccessTokenPayload>(token, { secret: this.env.JWT_ACCESS_SECRET })
   }
 
+  /**
+   * Public so the account screen can mark which session is the current one.
+   * Only ever the hash — the raw token stays in the cookie.
+   */
+  hashToken(token: string): string {
+    return this.hash(token)
+  }
+
   private hash(token: string): string {
     return createHash('sha256').update(token).digest('hex')
   }

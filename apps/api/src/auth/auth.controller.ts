@@ -8,19 +8,14 @@ import {
   UserRole,
   signInSchema,
 } from '@medibridge/types'
-import type { CookieOptions, Response } from 'express'
+import type { Response } from 'express'
 import { AppException } from '../common/errors/app-exception'
 import { validate } from '../common/pipes/zod-validation.pipe'
 import { loadEnv } from '../config/env'
 import { AuthService } from './auth.service'
-import {
-  ACCESS_COOKIE,
-  type AuthenticatedRequest,
-  CurrentUser,
-  Public,
-  REFRESH_COOKIE,
-} from './auth.guard'
+import { type AuthenticatedRequest, CurrentUser, Public, REFRESH_COOKIE } from './auth.guard'
 import { TenantContextService } from '../tenancy/tenant-context'
+import { clearSessionCookies, writeSessionCookies } from './session-cookies'
 import { TokenService } from './token.service'
 
 @ApiTags('Auth')
@@ -33,33 +28,6 @@ export class AuthController {
     private readonly tokens: TokenService,
     private readonly tenant: TenantContextService,
   ) {}
-
-  /**
-   * Cookie settings.
-   *
-   * httpOnly so script cannot read the session; sameSite lax so it survives
-   * ordinary navigation but is not sent on cross-site POSTs; secure in
-   * production only, since localhost is plain HTTP.
-   */
-  private cookieOptions(maxAge: number): CookieOptions {
-    return {
-      httpOnly: true,
-      sameSite: 'lax',
-      secure: this.env.NODE_ENV === 'production',
-      path: '/',
-      maxAge,
-    }
-  }
-
-  private setSessionCookies(res: Response, accessToken: string, refreshToken: string): void {
-    res.cookie(ACCESS_COOKIE, accessToken, this.cookieOptions(this.tokens.accessTtlMs()))
-    res.cookie(REFRESH_COOKIE, refreshToken, this.cookieOptions(this.tokens.refreshTtlMs()))
-  }
-
-  private clearSessionCookies(res: Response): void {
-    res.clearCookie(ACCESS_COOKIE, { path: '/' })
-    res.clearCookie(REFRESH_COOKIE, { path: '/' })
-  }
 
   @Public()
   @Post('sign-in')
@@ -79,7 +47,10 @@ export class AuthController {
       // belongs to a different company; omitting it silently disabled that.
       companyId: this.tenant.companyId(),
     })
-    this.setSessionCookies(res, accessToken, refreshToken)
+    writeSessionCookies(res, accessToken, refreshToken, {
+      accessMs: this.tokens.accessTtlMs(),
+      refreshMs: this.tokens.refreshTtlMs(),
+    })
     return { user }
   }
 
@@ -105,7 +76,10 @@ export class AuthController {
       requiredRole: UserRole.ADMIN,
       companyId: this.tenant.companyId(),
     })
-    this.setSessionCookies(res, accessToken, refreshToken)
+    writeSessionCookies(res, accessToken, refreshToken, {
+      accessMs: this.tokens.accessTtlMs(),
+      refreshMs: this.tokens.refreshTtlMs(),
+    })
     return { user }
   }
 
@@ -119,7 +93,7 @@ export class AuthController {
   ): Promise<{ user: SessionUser }> {
     const raw = req.cookies?.[REFRESH_COOKIE]
     if (!raw) {
-      this.clearSessionCookies(res)
+      clearSessionCookies(res)
       throw new AppException(ApiErrorCode.SESSION_EXPIRED)
     }
 
@@ -128,11 +102,14 @@ export class AuthController {
         userAgent: req.get('user-agent'),
         ipAddress: req.ip,
       })
-      this.setSessionCookies(res, accessToken, refreshToken)
+      writeSessionCookies(res, accessToken, refreshToken, {
+      accessMs: this.tokens.accessTtlMs(),
+      refreshMs: this.tokens.refreshTtlMs(),
+    })
       return { user }
     } catch (error) {
       // A dead refresh token should not leave stale cookies behind.
-      this.clearSessionCookies(res)
+      clearSessionCookies(res)
       throw error
     }
   }
@@ -152,7 +129,7 @@ export class AuthController {
     @Res({ passthrough: true }) res: Response,
   ): Promise<{ signedOut: true }> {
     await this.auth.signOut(req.cookies?.[REFRESH_COOKIE])
-    this.clearSessionCookies(res)
+    clearSessionCookies(res)
     return { signedOut: true }
   }
 }

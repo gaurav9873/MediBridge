@@ -67,6 +67,8 @@ export const ApiErrorCode = {
   OTP_INCORRECT: 'OTP_INCORRECT',
   OTP_EXPIRED: 'OTP_EXPIRED',
   OTP_TOO_MANY_ATTEMPTS: 'OTP_TOO_MANY_ATTEMPTS',
+  /** A second code was asked for inside the resend window. */
+  OTP_RESEND_TOO_SOON: 'OTP_RESEND_TOO_SOON',
 
   // Catalogue and stock
   MEDICINE_BLOCKED_SCHEDULE: 'MEDICINE_BLOCKED_SCHEDULE',
@@ -132,6 +134,7 @@ export const FRIENDLY_ERRORS: Record<ApiErrorCode, string> = {
   OTP_INCORRECT: v.otp.incorrect,
   OTP_EXPIRED: v.otp.expired,
   OTP_TOO_MANY_ATTEMPTS: v.otp.tooManyAttempts,
+  OTP_RESEND_TOO_SOON: v.otp.resendTooSoon,
 
   MEDICINE_BLOCKED_SCHEDULE: 'This medicine cannot be sold on MediBridge.',
   INSUFFICIENT_STOCK: v.quantity.exceedsStock,

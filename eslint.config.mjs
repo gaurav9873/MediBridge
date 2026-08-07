@@ -51,6 +51,26 @@ export default tseslint.config(
     rules: { 'no-console': 'off' },
   },
 
+  // Jest's own plumbing runs in CommonJS under Node, so it needs the Node
+  // globals the browser-shaped default config does not provide.
+  {
+    files: ['**/jest.config.js', '**/jest.setup.js'],
+    languageOptions: {
+      globals: { module: 'writable', process: 'readonly', require: 'readonly', __dirname: 'readonly' },
+    },
+  },
+
+  /*
+   * Test doubles stand in for Prisma's generated client, whose argument types
+   * are enormous generic unions. Reproducing them would make a fake harder to
+   * read than the thing it replaces, and the compiler still checks every call
+   * the service makes against the real client.
+   */
+  {
+    files: ['**/*.spec.ts'],
+    rules: { '@typescript-eslint/no-explicit-any': 'off' },
+  },
+
   /*
    * NestJS resolves constructor dependencies from decorator metadata, which
    * only exists for runtime imports. `import type { PrismaService }` erases the
