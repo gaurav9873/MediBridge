@@ -66,6 +66,10 @@ Every seeded account uses the password **`Medibridge@123`** and signs in with a
 **Full account list, database credentials and the seeded delivery geography:
 [docs/DEV-ACCOUNTS.md](docs/DEV-ACCOUNTS.md).**
 
+**Testing a module on your own machine: [docs/LOCAL-TESTING.md](docs/LOCAL-TESTING.md)** —
+the automated checks, then a checklist covering every Phase 2 screen, both
+layouts, all roles and tenant isolation.
+
 ---
 
 ## Commands
