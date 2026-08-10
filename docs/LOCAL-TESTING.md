@@ -46,7 +46,7 @@ useful.
 npm run typecheck          # expect: no output
 npx eslint apps packages   # expect: 0 errors (warnings are fine)
 npm run build              # expect: Tasks: 4 successful
-npm run test               # expect: Tests: 12 passed
+npm run test               # expect: Tests: 17 passed
 npm run verify:isolation   # expect: All 16 isolation checks passed
 ```
 
