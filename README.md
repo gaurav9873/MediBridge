@@ -5,8 +5,8 @@ Retailers search, order, and pay a 20% token to confirm; the remaining 80% is pa
 cash on delivery. Same-Day delivery is offered when a distributor is inside their
 configured radius, otherwise Next-Day.
 
-**Status:** Phases 0, 1, 1.5, part of 2 (auth + admin) and 2.5 (bulk engine + search)
-are built and running.
+**Status:** Phases 0, 1, 1.5 and **all of Phase 2** are built and running. Phase 3
+(medicine master through to orders) is next.
 
 The platform is **multi-tenant**: many companies run their own isolated business
 on it, in either MARKETPLACE or PRIVATE_DISTRIBUTOR mode, chosen by
@@ -198,7 +198,7 @@ These were taken as the recommended defaults for the MVP and can be revisited:
 | ~~Phase 2.3~~       | ~~Company setup~~ — **done**. Profile, terms, warehouses, bank, branding. See [COMPANY-SETUP.md](docs/COMPANY-SETUP.md) |
 | ~~Phase 2.4~~       | ~~Licence verification~~ — **done**. Per-document review, expiry tracking. See [LICENCE-VERIFICATION.md](docs/LICENCE-VERIFICATION.md) |
 | ~~Phase 2.5~~       | ~~Roles & permissions~~ — **done**. Editable roles, cached lookups. See [ROLES-AND-PERMISSIONS.md](docs/ROLES-AND-PERMISSIONS.md) |
-| **Phase 2.6**       | Profile management — user, company, warehouse                                                                                                                                |
+| ~~Phase 2.6~~       | ~~Profile management~~ — **done**. Details, phone change, addresses, notifications. See [PROFILE.md](docs/PROFILE.md) |
 | **Phase 3+**        | Medicine master · inventory · warehouse · bulk import UI · search · cart · orders · payments · delivery · notifications                                                      |
 
 Every module from Phase 2 onwards ships **end to end** — backend, UI, mobile

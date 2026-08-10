@@ -413,3 +413,70 @@ export const PERMISSION_GROUPS: ReadonlyArray<{
 export const COMPANY_PERMISSIONS: readonly Permission[] = PERMISSION_GROUPS.flatMap((group) =>
   group.permissions.map((entry) => entry.key),
 )
+
+/**
+ * The things we would tell someone about, in plain words.
+ *
+ * Only the events a person can sensibly opt out of. Nothing here is required
+ * reading — an order being cancelled reaches them in the app regardless; this
+ * decides whether it also costs an SMS.
+ *
+ * Absent preference rows mean ON, so adding an event here reaches people by
+ * default rather than silently not reaching them until they find the screen.
+ */
+export const NOTIFIABLE_EVENTS: ReadonlyArray<{
+  key: string
+  label: string
+  description: string
+}> = [
+  {
+    key: 'ORDER_PLACED',
+    label: 'A new order arrives',
+    description: 'Someone has placed an order with you.',
+  },
+  {
+    key: 'ORDER_CONFIRMED',
+    label: 'An order is confirmed',
+    description: 'Payment went through and the order is live.',
+  },
+  {
+    key: 'ORDER_DISPATCHED',
+    label: 'An order is on its way',
+    description: 'The order has left the warehouse.',
+  },
+  {
+    key: 'ORDER_DELIVERED',
+    label: 'An order is delivered',
+    description: 'The medicines reached the shop.',
+  },
+  {
+    key: 'ORDER_CANCELLED',
+    label: 'An order is cancelled',
+    description: 'Either side cancelled before delivery.',
+  },
+  {
+    key: 'PAYMENT_RECEIVED',
+    label: 'A payment arrives',
+    description: 'Money reached your account.',
+  },
+  {
+    key: 'LICENSE_EXPIRING',
+    label: 'A licence is about to expire',
+    description: 'Ninety days before it lapses, then again closer to the date.',
+  },
+  {
+    key: 'LOW_STOCK',
+    label: 'Stock is running low',
+    description: 'A batch has dropped below the level you set.',
+  },
+  {
+    key: 'BATCH_EXPIRING',
+    label: 'A batch is nearing expiry',
+    description: 'Time to discount it or send it back.',
+  },
+  {
+    key: 'SETTLEMENT_PAID',
+    label: 'A settlement is paid',
+    description: 'Your weekly payout has been sent.',
+  },
+]

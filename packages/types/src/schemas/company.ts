@@ -123,3 +123,17 @@ export const assignRoleSchema = z.object({
   roleId: z.uuid(v.selectRequired('role')),
 })
 export type AssignRoleInput = z.infer<typeof assignRoleSchema>
+
+/** Your own name and email. The mobile number changes through a code. */
+export const profileSchema = z.object({
+  fullName: z.string().trim().min(2, v.requiredNamed('full name')).max(120, v.text.tooLong(120)),
+  email: z.email(v.email.invalid).max(255),
+})
+export type ProfileInput = z.infer<typeof profileSchema>
+
+export const notificationSettingSchema = z.object({
+  event: z.string().min(1),
+  channel: z.enum(['SMS', 'EMAIL', 'WHATSAPP']),
+  enabled: z.boolean(),
+})
+export type NotificationSettingInput = z.infer<typeof notificationSettingSchema>

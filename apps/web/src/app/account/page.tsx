@@ -2,7 +2,7 @@
 
 import { copy } from '@medibridge/copy'
 import { Alert, Button, Card, CardBody, CardHeader, PageShell, Skeleton } from '@medibridge/ui'
-import { Building2, LogOut, ShieldCheck, Users } from 'lucide-react'
+import { Building2, LogOut, ShieldCheck, UserCog, Users } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import * as React from 'react'
 import { AccountSessions } from '@/components/account-sessions'
@@ -108,6 +108,13 @@ export default function AccountPage(): React.JSX.Element {
           />
           <CardBody>
             <div className="flex flex-wrap gap-3">
+              <Button
+                variant="secondary"
+                icon={<UserCog />}
+                onClick={() => router.push('/account/profile')}
+              >
+                My profile
+              </Button>
               <Button
                 variant="secondary"
                 icon={<Building2 />}
