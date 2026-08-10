@@ -30,7 +30,7 @@ import * as React from 'react'
 import { ApiClientError, api } from '@/lib/api-client'
 import { BulkImportWizard } from '@/components/bulk/bulk-import-wizard'
 
-const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1'
+const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4100/api/v1'
 
 /** Status wording and tone in one place — icon and word, never colour alone. */
 const STATUS: Record<string, { label: string; tone: StatusTone }> = {

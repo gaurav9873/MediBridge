@@ -84,7 +84,7 @@ Retailers are `Customer` rows on MediBridge; the two distributors' logins belong
 to their own companies. To act as a specific tenant against the API, send its id:
 
 ```bash
-curl -H "x-tenant-id: <company uuid>" http://localhost:4000/api/v1/tenant/branding
+curl -H "x-tenant-id: <company uuid>" http://localhost:4100/api/v1/tenant/branding
 ```
 
 ## Database access
@@ -101,7 +101,7 @@ a result.
 | Field    | Value        |
 | -------- | ------------ |
 | Host     | `localhost`  |
-| Port     | `5432`       |
+| Port     | `5433`       |
 | Database | `medibridge` |
 
 `medibridge` is the owner and **bypasses RLS** — which is what makes it useful

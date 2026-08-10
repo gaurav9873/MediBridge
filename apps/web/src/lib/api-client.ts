@@ -9,7 +9,7 @@ import { type ApiResponse, type ApiFieldError, friendlyMessage } from '@medibrid
  * `error.message` directly and never have to inspect what went wrong.
  */
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1'
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4100/api/v1'
 
 export class ApiClientError extends Error {
   readonly code: string

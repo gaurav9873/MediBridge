@@ -8,7 +8,7 @@ import { CheckCircle2, Download, FileSpreadsheet, Loader2, Upload, X } from 'luc
 import * as React from 'react'
 import { ApiClientError, api } from '@/lib/api-client'
 
-const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1'
+const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4100/api/v1'
 
 /**
  * The one import wizard, reused by every module.

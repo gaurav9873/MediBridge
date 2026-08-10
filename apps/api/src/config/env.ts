@@ -21,9 +21,9 @@ const envSchema = z.object({
   APP_DATABASE_URL: z.string().min(1).optional(),
   REDIS_URL: z.string().min(1, 'REDIS_URL is required'),
 
-  API_PORT: z.coerce.number().int().min(1).max(65535).default(4000),
+  API_PORT: z.coerce.number().int().min(1).max(65535).default(4100),
   API_PREFIX: z.string().default('api/v1'),
-  CORS_ORIGINS: z.string().default('http://localhost:3000'),
+  CORS_ORIGINS: z.string().default('http://localhost:3100'),
 
   JWT_ACCESS_SECRET: z.string().min(16, 'JWT_ACCESS_SECRET must be at least 16 characters'),
   JWT_REFRESH_SECRET: z.string().min(16, 'JWT_REFRESH_SECRET must be at least 16 characters'),

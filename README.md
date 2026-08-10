@@ -31,11 +31,26 @@ npm run dev        # API on :4000, web on :3000
 `npm run setup` is safe to re-run. If Docker Desktop is not running, start it first
 (`open -a Docker`).
 
+### Ports
+
+This project keeps its own block so it never fights another project on the same
+machine — the defaults 3000, 4000 and 5432 are all deliberately left free.
+
+| What     | Port   |
+| -------- | ------ |
+| Web      | `3100` |
+| API      | `4100` |
+| Postgres | `5433` |
+| Redis    | `6380` |
+
+Inside the containers Postgres and Redis still use 5432 and 6379; only the
+published host ports moved.
+
 | URL                                       | What                                                 |
 | ----------------------------------------- | ---------------------------------------------------- |
-| http://localhost:3000                     | Web app — currently the design system reference page |
-| http://localhost:4000/api/v1/health/ready | API health: database, PostGIS and Redis              |
-| http://localhost:4000/docs                | Swagger API documentation                            |
+| http://localhost:3100                     | Web app — currently the design system reference page |
+| http://localhost:4100/api/v1/health/ready | API health: database, PostGIS and Redis              |
+| http://localhost:4100/docs                | Swagger API documentation                            |
 
 ### Signing in
 
@@ -44,9 +59,9 @@ Every seeded account uses the password **`Medibridge@123`** and signs in with a
 
 | Role        | Mobile       | Page                              |
 | ----------- | ------------ | --------------------------------- |
-| Admin       | `9000000001` | http://localhost:3000/admin/login |
-| Retailer    | `9000000020` | http://localhost:3000/login       |
-| Distributor | `9000000010` | http://localhost:3000/login       |
+| Admin       | `9000000001` | http://localhost:3100/admin/login |
+| Retailer    | `9000000020` | http://localhost:3100/login       |
+| Distributor | `9000000010` | http://localhost:3100/login       |
 
 **Full account list, database credentials and the seeded delivery geography:
 [docs/DEV-ACCOUNTS.md](docs/DEV-ACCOUNTS.md).**

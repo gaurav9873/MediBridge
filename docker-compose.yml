@@ -18,8 +18,9 @@ services:
       # Deterministic collation so ORDER BY behaves identically on every machine.
       POSTGRES_INITDB_ARGS: '--encoding=UTF8 --locale=C'
     ports:
-      # 5432 is free on this machine (local MySQL owns 3306 and stays untouched).
-      - '5432:5432'
+      # 5433, not 5432 — this project keeps its own port block so it never
+      # fights another project's Postgres. Inside the container it is still 5432.
+      - '5433:5432'
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
