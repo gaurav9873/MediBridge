@@ -2,7 +2,7 @@
 
 import { copy } from '@medibridge/copy'
 import { Alert, Button, Card, CardBody, CardHeader, PageShell, Skeleton } from '@medibridge/ui'
-import { LogOut, Users } from 'lucide-react'
+import { Building2, LogOut, Users } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import * as React from 'react'
 import { AccountSessions } from '@/components/account-sessions'
@@ -102,11 +102,27 @@ export default function AccountPage(): React.JSX.Element {
         ) : null}
 
         <Card>
-          <CardHeader title="Your team" description="Give each person their own sign-in." />
+          <CardHeader
+            title="Your business"
+            description="Settings, warehouses, payment terms and the people who work here."
+          />
           <CardBody>
-            <Button variant="secondary" icon={<Users />} onClick={() => router.push('/account/team')}>
-              Manage team
-            </Button>
+            <div className="flex flex-wrap gap-3">
+              <Button
+                variant="secondary"
+                icon={<Building2 />}
+                onClick={() => router.push('/account/company')}
+              >
+                Business settings
+              </Button>
+              <Button
+                variant="secondary"
+                icon={<Users />}
+                onClick={() => router.push('/account/team')}
+              >
+                Manage team
+              </Button>
+            </div>
           </CardBody>
         </Card>
 

@@ -52,6 +52,10 @@ export const validation = {
     sameAsOld: 'Your new password must be different from your current one.',
   },
 
+  url: {
+    invalid: 'Enter a full web address, starting with https://',
+  },
+
   otp: {
     invalid: 'Please enter the 6-digit code we sent you.',
     incorrect: 'That code is not correct. Please check and try again.',

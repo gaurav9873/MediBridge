@@ -210,6 +210,45 @@ export const account = {
     } satisfies PageHelp,
   },
 
+  /** A company's own settings: profile, terms, warehouses, bank, branding. */
+  company: {
+    page: {
+      title: 'Business Settings',
+      subtitle: 'Your details, how you get paid, and where you ship from.',
+    } satisfies PageMeta,
+    help: {
+      whatIsThis:
+        'Everything about how your business works on MediBridge. Change any section on its own — you do not have to fill in the whole page to save one thing.',
+      topics: [
+        {
+          question: 'What does the Same-Day radius do?',
+          answer:
+            'Retailers within that many kilometres of a warehouse can choose Same-Day Delivery, as long as they order before the cut-off time. Everyone further away sees Next-Day.',
+        },
+        {
+          question: 'If I change my token percentage, what happens to old orders?',
+          answer:
+            'Nothing. Every order keeps the percentage that applied when it was placed, so nobody is ever asked for more money after the fact.',
+        },
+        {
+          question: 'Why can I only see the last four digits of my account number?',
+          answer:
+            'So a screenshot or someone glancing at your screen cannot capture it. To change the account, type the full number again.',
+        },
+        {
+          question: 'I want to stop taking orders for a few days.',
+          answer:
+            'Pause the warehouse. Your stock stays exactly as it is and nothing is deleted — it simply stops appearing in searches until you resume.',
+        },
+        {
+          question: 'Why will it not let me close a warehouse?',
+          answer:
+            'Because stock still ships from it. Move or remove that stock first, or pause the warehouse instead, which is reversible.',
+        },
+      ],
+    } satisfies PageHelp,
+  },
+
   security: {
     fields: {
       currentPassword: {

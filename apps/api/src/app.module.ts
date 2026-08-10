@@ -7,6 +7,7 @@ import path from 'node:path'
 import { AdminModule } from './admin/admin.module'
 import { AuthModule } from './auth/auth.module'
 import { BulkModule } from './bulk/bulk.module'
+import { CompanyModule } from './company/company.module'
 import { OnboardingModule } from './onboarding/onboarding.module'
 import { PrismaModule } from './common/prisma/prisma.module'
 import { RedisModule } from './common/redis/redis.module'
@@ -58,6 +59,7 @@ const env = loadEnv()
     AuthModule,
     BulkModule,
     OnboardingModule,
+    CompanyModule,
     HealthModule,
     AdminModule,
     SearchModule,
