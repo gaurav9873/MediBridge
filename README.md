@@ -181,7 +181,7 @@ These were taken as the recommended defaults for the MVP and can be revisited:
 | ~~Phase 2.1~~       | ~~Authentication completion~~ — **done**. OTP sign-in, sign-up with phone confirmation, password reset, session management. See [AUTHENTICATION.md](docs/AUTHENTICATION.md) |
 | ~~Phase 2.2~~       | ~~Registration & onboarding~~ — **done**. Business details, documents, seller tenants, employees. See [ONBOARDING.md](docs/ONBOARDING.md) |
 | ~~Phase 2.3~~       | ~~Company setup~~ — **done**. Profile, terms, warehouses, bank, branding. See [COMPANY-SETUP.md](docs/COMPANY-SETUP.md) |
-| **Phase 2.4**       | Licence verification — upload, review, approve/reject, expiry                                                                                                                |
+| ~~Phase 2.4~~       | ~~Licence verification~~ — **done**. Per-document review, expiry tracking. See [LICENCE-VERIFICATION.md](docs/LICENCE-VERIFICATION.md) |
 | **Phase 2.5**       | Roles & permissions UI                                                                                                                                                       |
 | **Phase 2.6**       | Profile management — user, company, warehouse                                                                                                                                |
 | **Phase 3+**        | Medicine master · inventory · warehouse · bulk import UI · search · cart · orders · payments · delivery · notifications                                                      |

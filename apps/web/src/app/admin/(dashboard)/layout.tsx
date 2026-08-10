@@ -4,6 +4,7 @@ import { copy } from '@medibridge/copy'
 import { AppShell, Button, type NavItem, Skeleton } from '@medibridge/ui'
 import {
   BarChart3,
+  FileCheck2,
   Home,
   LogOut,
   Package,
@@ -38,6 +39,7 @@ import { useSession, useSignOut } from '@/lib/use-session'
 const adminNav: readonly NavItem[] = [
   { href: '/admin', label: copy.common.nav.home, icon: <Home /> },
   { href: '/admin/approvals', label: 'Approvals', icon: <ShieldCheck /> },
+  { href: '/admin/licences', label: 'Licences', icon: <FileCheck2 /> },
   { href: '/admin/imports', label: 'Bulk Imports', icon: <Upload /> },
   { href: '/admin/medicines', label: copy.common.nav.medicines, icon: <Pill /> },
   { href: '/admin/users', label: copy.common.nav.users, icon: <Users /> },
