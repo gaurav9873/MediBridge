@@ -1,8 +1,9 @@
 import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post } from '@nestjs/common'
 import { ApiOperation, ApiTags } from '@nestjs/swagger'
-import { type Permission, type SessionUser, assignRoleSchema, roleSchema } from '@medibridge/types'
+import { Permission, type SessionUser, assignRoleSchema, roleSchema } from '@medibridge/types'
 import { validate } from '../common/pipes/zod-validation.pipe'
 import { CurrentUser } from './auth.guard'
+import { RequirePermission } from './permission.guard'
 import { RoleService, type PermissionGroup, type RoleSummary } from './role.service'
 
 /**
@@ -17,6 +18,7 @@ import { RoleService, type PermissionGroup, type RoleSummary } from './role.serv
 export class RoleController {
   constructor(private readonly roles: RoleService) {}
 
+  @RequirePermission(Permission.EMPLOYEE_VIEW)
   @Get()
   @ApiOperation({ summary: 'Roles in this company, with permissions and member counts' })
   async list(@CurrentUser() user: SessionUser): Promise<RoleSummary[]> {
@@ -24,12 +26,14 @@ export class RoleController {
   }
 
   /** Static, so the browser may cache it: these keys ship with the code. */
+  @RequirePermission(Permission.EMPLOYEE_VIEW)
   @Get('permissions')
   @ApiOperation({ summary: 'The permission catalogue, grouped and in plain words' })
   catalogue(): PermissionGroup[] {
     return this.roles.catalogue()
   }
 
+  @RequirePermission(Permission.ROLE_MANAGE)
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create a role of this company’s own' })
@@ -40,6 +44,7 @@ export class RoleController {
     return this.roles.create(user, { name: body.name, permissions: body.permissions as Permission[] })
   }
 
+  @RequirePermission(Permission.ROLE_MANAGE)
   @Patch(':id')
   @ApiOperation({ summary: 'Change what a role can do' })
   async update(
@@ -53,6 +58,7 @@ export class RoleController {
     })
   }
 
+  @RequirePermission(Permission.ROLE_MANAGE)
   @Delete(':id')
   @ApiOperation({ summary: 'Delete a custom role' })
   async remove(
@@ -62,6 +68,7 @@ export class RoleController {
     return this.roles.remove(user, id)
   }
 
+  @RequirePermission(Permission.ROLE_MANAGE)
   @Post('assign')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Give a team member a role' })

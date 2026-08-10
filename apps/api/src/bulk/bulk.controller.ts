@@ -14,6 +14,7 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express'
 import { ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger'
 import {
+  Permission,
   ApiErrorCode,
   BULK_LIMITS,
   type BulkJobListQuery,
@@ -28,6 +29,7 @@ import {
 import type { Response } from 'express'
 import { AppException } from '../common/errors/app-exception'
 import { CurrentUser } from '../auth/auth.guard'
+import { RequirePermission } from '../auth/permission.guard'
 import { BulkService } from './bulk.service'
 import { BulkHandlerRegistry } from './handlers/registry'
 
@@ -39,6 +41,7 @@ import { BulkHandlerRegistry } from './handlers/registry'
  */
 @ApiTags('Bulk')
 @Controller('bulk')
+@RequirePermission(Permission.BULK_IMPORT_RUN)
 export class BulkController {
   constructor(
     private readonly bulk: BulkService,

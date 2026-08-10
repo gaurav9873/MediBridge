@@ -152,6 +152,18 @@ Sign in as `9000000010`.
 - [ ] Assign it to someone, then try to delete → refused, and told how many hold it
 - [ ] Open **Company Admin** → untick "Manage roles" → **refused**, with the reason
 
+#### Permission enforcement (now active)
+
+Routes check permissions, so removing one really does close a door.
+
+- [ ] As `9000000010`, open **Company Admin** → untick **"Change business settings"** → save
+- [ ] Go to `/account/company` → **refused**. The API returns `FORBIDDEN`
+- [ ] `/account/roles`, `/account/team` and `/account/profile` still work — they need different permissions, and your own profile needs none
+- [ ] Tick it back → `/account/company` works **immediately**, with no sign-out
+
+> Your own profile is deliberately never permission-gated. Everyone may change
+> their own name, email and mobile number.
+
 ### 4.6 Profile — Phase 2.6
 
 Sign in as `9000000021` (Kumar Pharmacy).
@@ -221,6 +233,8 @@ Do not report these as bugs:
 - **No super admin account.** `9000000001` is a tenant admin, not a platform owner.
 - **The web app ignores tenant branding.** The endpoint works; the UI does not use it yet.
 - **No CI.** By your decision — deployment work is deferred.
+- **No audit log viewer.** Every change is recorded in `audit_logs` with who, what and the before/after — but there is no screen for it. Read it with `npm run db:studio`.
+- **No email confirmation.** Changing your email clears the "verified" flag, but nothing sends a confirmation link yet. The mobile number does have a code flow.
 
 ---
 

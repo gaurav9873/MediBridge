@@ -14,6 +14,7 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express'
 import { ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger'
 import {
+  Permission,
   ApiErrorCode,
   type SessionUser,
   employeeInviteSchema,
@@ -24,6 +25,7 @@ import type { Response } from 'express'
 import { AppException } from '../common/errors/app-exception'
 import { validate } from '../common/pipes/zod-validation.pipe'
 import { CurrentUser } from '../auth/auth.guard'
+import { RequirePermission } from '../auth/permission.guard'
 import { DocumentService, type DocumentSummary } from './document.service'
 import { EmployeeService, type EmployeeSummary } from './employee.service'
 import { OnboardingService, type OnboardingStatus } from './onboarding.service'
@@ -105,12 +107,14 @@ export class OnboardingController {
   // Employees
   // ---------------------------------------------------------------------------
 
+  @RequirePermission(Permission.EMPLOYEE_VIEW)
   @Get('employees')
   @ApiOperation({ summary: 'People who work for this company' })
   async listEmployees(@CurrentUser() user: SessionUser): Promise<EmployeeSummary[]> {
     return this.employees.list(user)
   }
 
+  @RequirePermission(Permission.EMPLOYEE_MANAGE)
   @Post('employees')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Add a colleague and get their temporary password' })
@@ -121,6 +125,7 @@ export class OnboardingController {
     return this.employees.invite(user, body)
   }
 
+  @RequirePermission(Permission.EMPLOYEE_MANAGE)
   @Delete('employees/:id')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Remove a colleague' })

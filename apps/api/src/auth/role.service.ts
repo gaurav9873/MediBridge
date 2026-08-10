@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common'
 import {
   ApiErrorCode,
   PERMISSION_GROUPS,
-  type Permission,
+  Permission,
   type SessionUser,
 } from '@medibridge/types'
 import { AppException } from '../common/errors/app-exception'
@@ -151,7 +151,10 @@ export class RoleService {
 
       // Locking yourself out is easy to do and painful to undo, so the one
       // permission that can grant permissions back is protected.
-      if (role.key === 'COMPANY_ADMIN' && !input.permissions.includes('ROLE_MANAGE' as Permission)) {
+      // Permission.ROLE_MANAGE is 'role.manage'. Comparing against the enum's
+      // NAME instead of its value made this fire on every edit, so the role
+      // could not be changed at all.
+      if (role.key === 'COMPANY_ADMIN' && !input.permissions.includes(Permission.ROLE_MANAGE)) {
         throw new AppException(ApiErrorCode.VALIDATION_FAILED, {
           fields: [
             {

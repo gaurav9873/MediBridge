@@ -1,6 +1,7 @@
 import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post } from '@nestjs/common'
 import { ApiOperation, ApiTags } from '@nestjs/swagger'
 import {
+  Permission,
   type SessionUser,
   companyBankSchema,
   companyBrandingSchema,
@@ -11,6 +12,7 @@ import {
 } from '@medibridge/types'
 import { validate } from '../common/pipes/zod-validation.pipe'
 import { CurrentUser } from '../auth/auth.guard'
+import { RequirePermission } from '../auth/permission.guard'
 import { CompanyService, type CompanySettings, type WarehouseSummary } from './company.service'
 
 /**
@@ -21,6 +23,7 @@ import { CompanyService, type CompanySettings, type WarehouseSummary } from './c
  */
 @ApiTags('Company')
 @Controller('company')
+@RequirePermission(Permission.SETTINGS_MANAGE)
 export class CompanyController {
   constructor(private readonly company: CompanyService) {}
 

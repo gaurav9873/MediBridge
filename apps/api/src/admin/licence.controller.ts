@@ -1,8 +1,9 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Query } from '@nestjs/common'
 import { ApiOperation, ApiTags } from '@nestjs/swagger'
-import { type SessionUser, UserRole, rejectApplicationSchema } from '@medibridge/types'
+import { Permission, type SessionUser, UserRole, rejectApplicationSchema } from '@medibridge/types'
 import { validate } from '../common/pipes/zod-validation.pipe'
 import { CurrentUser, Roles } from '../auth/auth.guard'
+import { RequirePermission } from '../auth/permission.guard'
 import { LicenceService, type DocumentReview } from './licence.service'
 
 /**
@@ -17,12 +18,14 @@ import { LicenceService, type DocumentReview } from './licence.service'
 export class LicenceController {
   constructor(private readonly licences: LicenceService) {}
 
+  @RequirePermission(Permission.CUSTOMER_VIEW)
   @Get('pending')
   @ApiOperation({ summary: 'Documents waiting for a decision' })
   async pending(): Promise<DocumentReview[]> {
     return this.licences.pending()
   }
 
+  @RequirePermission(Permission.CUSTOMER_VIEW)
   @Get('expiring')
   @ApiOperation({ summary: 'Approved licences about to lapse' })
   async expiring(@Query('days') days?: string): Promise<DocumentReview[]> {
@@ -30,6 +33,7 @@ export class LicenceController {
     return this.licences.expiring(Number.isFinite(withinDays) && withinDays > 0 ? withinDays : undefined)
   }
 
+  @RequirePermission(Permission.CUSTOMER_APPROVE)
   @Post(':id/approve')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Accept one document' })
@@ -40,6 +44,7 @@ export class LicenceController {
     return this.licences.approveDocument(id, admin.id)
   }
 
+  @RequirePermission(Permission.CUSTOMER_APPROVE)
   @Post(':id/reject')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Refuse one document, with a reason' })

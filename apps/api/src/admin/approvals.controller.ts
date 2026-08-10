@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common'
 import { ApiOperation, ApiTags } from '@nestjs/swagger'
 import {
+  Permission,
   type PendingApplication,
   type RejectApplicationInput,
   type SessionUser,
@@ -17,6 +18,7 @@ import {
   rejectApplicationSchema,
 } from '@medibridge/types'
 import { CurrentUser, Roles } from '../auth/auth.guard'
+import { RequirePermission } from '../auth/permission.guard'
 import { validate } from '../common/pipes/zod-validation.pipe'
 import { ApprovalsService } from './approvals.service'
 
@@ -26,12 +28,14 @@ import { ApprovalsService } from './approvals.service'
 export class ApprovalsController {
   constructor(private readonly approvals: ApprovalsService) {}
 
+  @RequirePermission(Permission.CUSTOMER_VIEW)
   @Get()
   @ApiOperation({ summary: 'Businesses waiting for document verification' })
   list(): Promise<PendingApplication[]> {
     return this.approvals.listPending()
   }
 
+  @RequirePermission(Permission.CUSTOMER_APPROVE)
   @Post(':userId/approve')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Approve a business so it can start ordering' })
@@ -42,6 +46,7 @@ export class ApprovalsController {
     return this.approvals.approve(userId, admin.id)
   }
 
+  @RequirePermission(Permission.CUSTOMER_APPROVE)
   @Post(':userId/reject')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Reject the uploaded documents with a reason' })

@@ -1,7 +1,8 @@
 import { Controller, Get, Query } from '@nestjs/common'
 import { ApiOperation, ApiTags } from '@nestjs/swagger'
-import { type SessionUser, UserRole, medicineSearchSchema } from '@medibridge/types'
+import { Permission, type SessionUser, UserRole, medicineSearchSchema } from '@medibridge/types'
 import { CurrentUser, Roles } from '../auth/auth.guard'
+import { RequirePermission } from '../auth/permission.guard'
 import { SearchService, type SearchResult } from './search.service'
 
 @ApiTags('Search')
@@ -10,6 +11,7 @@ import { SearchService, type SearchResult } from './search.service'
 export class SearchController {
   constructor(private readonly search: SearchService) {}
 
+  @RequirePermission(Permission.PRODUCT_VIEW)
   @Get('medicines')
   @ApiOperation({ summary: 'Search medicines available from distributors near you' })
   medicines(

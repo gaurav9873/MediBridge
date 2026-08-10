@@ -69,7 +69,7 @@ that can bypass RLS. A document cannot fail; those can.
 | Sign-in carries the portal's tenant | **Complete** | Controller passes `companyId`; cross-tenant sign-in refused               |
 | Permission keys + system roles      | **Complete** | 7 system roles seeded per company, 4 companies                            |
 | `PermissionGuard` registered        | **Complete** | Global, after `AuthGuard`                                                 |
-| Routes using `@RequirePermission()` | **Pending**  | Existing routes still use `@Roles()`. Guard and data are in place; routes migrate as each module is touched. |
+| Routes using `@RequirePermission()` | **Complete** | 19 routes across company, roles, employees, bulk, search and admin review. Verified by removing a permission and watching the route refuse. |
 
 ## Product architecture
 
@@ -124,7 +124,6 @@ change.
 | ----------------------------------- | --------------------------------------------------------------------------------------------------------------- |
 | **No automated test suite**         | `jest` is configured and there are zero spec files. Per MODULE-STANDARD.md tests begin with Phase 2. The rules most worth testing — money splits, state machines, compliance gates — belong to modules that do not exist yet. Tenant isolation, the one foundation invariant that already had teeth, is covered by `verify:isolation`. |
 | **No CI**                           | No workflow runs `typecheck`, `lint`, `build`, the drift guard or `verify:isolation` on push. Everything is run by hand. This is the single largest remaining gap, and the reason a broken isolation claim survived. |
-| **Routes on `@Roles()`**            | The permission guard and 126 keys exist; routes migrate module by module.                                       |
 | **Web app ignores branding**        | Endpoint verified per tenant; the UI does not consume it yet.                                                   |
 | **No platform-owner account**       | `runAsPlatform()` and the `PLATFORM_*` keys exist, but no user has `companyId = NULL`, so nothing exercises them by login. Phase 2.5. |
 | **Medicine rules not a module**     | Specified in MULTI-TENANCY.md; still inside the medicine handler.                                               |
