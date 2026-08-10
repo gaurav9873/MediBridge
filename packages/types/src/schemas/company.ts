@@ -110,3 +110,16 @@ export type WarehouseInput = z.infer<typeof warehouseSchema>
 /** Editing a warehouse leaves its address alone; that is a separate action. */
 export const warehouseUpdateSchema = warehouseSchema.omit({ address: true })
 export type WarehouseUpdateInput = z.infer<typeof warehouseUpdateSchema>
+
+/** Creating or editing a role. The screen sends the complete permission set. */
+export const roleSchema = z.object({
+  name: z.string().trim().min(2, v.requiredNamed('role name')).max(60, v.text.tooLong(60)),
+  permissions: z.array(z.string().min(1)).max(200),
+})
+export type RoleInput = z.infer<typeof roleSchema>
+
+export const assignRoleSchema = z.object({
+  userId: z.uuid(v.requiredNamed('team member')),
+  roleId: z.uuid(v.selectRequired('role')),
+})
+export type AssignRoleInput = z.infer<typeof assignRoleSchema>

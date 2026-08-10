@@ -2,7 +2,7 @@
 
 import { copy } from '@medibridge/copy'
 import { Alert, Button, Card, CardBody, CardHeader, PageShell, Skeleton } from '@medibridge/ui'
-import { Building2, LogOut, Users } from 'lucide-react'
+import { Building2, LogOut, ShieldCheck, Users } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import * as React from 'react'
 import { AccountSessions } from '@/components/account-sessions'
@@ -121,6 +121,13 @@ export default function AccountPage(): React.JSX.Element {
                 onClick={() => router.push('/account/team')}
               >
                 Manage team
+              </Button>
+              <Button
+                variant="secondary"
+                icon={<ShieldCheck />}
+                onClick={() => router.push('/account/roles')}
+              >
+                Roles and permissions
               </Button>
             </div>
           </CardBody>

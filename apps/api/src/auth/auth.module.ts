@@ -7,7 +7,10 @@ import { AuthController } from './auth.controller'
 import { AuthGuard } from './auth.guard'
 import { AuthService } from './auth.service'
 import { OTP_SENDER, ChallengeService } from './challenge.service'
+import { PermissionCacheService } from './permission-cache.service'
 import { PermissionGuard } from './permission.guard'
+import { RoleController } from './role.controller'
+import { RoleService } from './role.service'
 import { AuthProviderRegistry } from './providers/auth-provider.registry'
 import { OtpProvider } from './providers/otp.provider'
 import { PasswordProvider } from './providers/password.provider'
@@ -22,7 +25,7 @@ import { TokenService } from './token.service'
 @Global()
 @Module({
   imports: [JwtModule.register({})],
-  controllers: [AuthController, AccountController],
+  controllers: [AuthController, AccountController, RoleController],
   providers: [
     AuthService,
     AccountService,
@@ -32,6 +35,8 @@ import { TokenService } from './token.service'
     OtpProvider,
     AuthProviderRegistry,
     PermissionGuard,
+    PermissionCacheService,
+    RoleService,
     // Swapping in a real SMS gateway is this one line: a class implementing
     // OtpSenderContract, bound to the same token. Nothing about how codes are
     // generated, expired, counted or spent changes with it.
@@ -40,6 +45,14 @@ import { TokenService } from './token.service'
     // Runs after AuthGuard, so request.user is populated by the time it checks.
     { provide: APP_GUARD, useClass: PermissionGuard },
   ],
-  exports: [AuthService, AccountService, ChallengeService, TokenService, AuthProviderRegistry],
+  exports: [
+    AuthService,
+    AccountService,
+    ChallengeService,
+    TokenService,
+    AuthProviderRegistry,
+    PermissionCacheService,
+    RoleService,
+  ],
 })
 export class AuthModule {}

@@ -2,7 +2,7 @@ import { type CanActivate, type ExecutionContext, Injectable, SetMetadata } from
 import { Reflector } from '@nestjs/core'
 import { ApiErrorCode, type Permission } from '@medibridge/types'
 import { AppException } from '../common/errors/app-exception'
-import { TenantPrismaService } from '../tenancy/tenant-prisma.service'
+import { PermissionCacheService } from './permission-cache.service'
 import type { AuthenticatedRequest } from './auth.guard'
 
 export const PERMISSIONS_KEY = 'requiredPermissions'
@@ -22,7 +22,7 @@ export const RequirePermission = (...permissions: Permission[]): MethodDecorator
 export class PermissionGuard implements CanActivate {
   constructor(
     private readonly reflector: Reflector,
-    private readonly db: TenantPrismaService,
+    private readonly cache: PermissionCacheService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -36,30 +36,11 @@ export class PermissionGuard implements CanActivate {
     const user = request.user
     if (!user) throw new AppException(ApiErrorCode.UNAUTHENTICATED)
 
-    const granted = await this.permissionsFor(user.id)
+    const granted = await this.cache.permissionsFor(user.id)
     const allowed = required.every((permission) => granted.has(permission))
     if (!allowed) throw new AppException(ApiErrorCode.FORBIDDEN)
 
     return true
   }
 
-  /** Every permission across every role the user holds. */
-  private async permissionsFor(userId: string): Promise<Set<string>> {
-    // Joins roles, which is tenant-scoped. Permissions are resolved before the
-    // request's own tenant work begins, so this reads outside that scope.
-    const assignments = await this.db.runPreTenant((tx) =>
-      tx.userRoleAssignment.findMany({
-        where: { userId },
-        include: { role: { include: { permissions: true } } },
-      }),
-    )
-
-    const granted = new Set<string>()
-    for (const assignment of assignments) {
-      for (const permission of assignment.role.permissions) {
-        granted.add(permission.permission)
-      }
-    }
-    return granted
-  }
 }

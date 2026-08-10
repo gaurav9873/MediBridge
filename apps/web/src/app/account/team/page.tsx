@@ -97,6 +97,21 @@ export default function TeamPage(): React.JSX.Element {
     },
   })
 
+  const roles = useQuery({
+    queryKey: ['roles'],
+    queryFn: () => api.get<Array<{ id: string; key: string; name: string }>>('/roles'),
+    enabled: isSignedIn,
+  })
+
+  const assign = useMutation({
+    mutationFn: (input: { userId: string; roleId: string }) => api.post('/roles/assign', input),
+    onSuccess: () => {
+      notify.success('Role updated. It applies from their next action.')
+      void queryClient.invalidateQueries({ queryKey: ['team'] })
+    },
+    onError: (error) => notify.error(error instanceof ApiClientError ? error.message : undefined),
+  })
+
   const remove = useMutation({
     mutationFn: (id: string) => api.delete(`/onboarding/employees/${id}`),
     onSuccess: () => {
@@ -226,16 +241,37 @@ export default function TeamPage(): React.JSX.Element {
                         {employee.lastLoginAt ? 'has signed in' : 'never signed in'}
                       </span>
                     </div>
-                    {employee.isSelf ? null : (
-                      <Button
-                        variant="secondary"
-                        size="md"
-                        loading={remove.isPending && remove.variables === employee.id}
-                        onClick={() => remove.mutate(employee.id)}
+                    <div className="flex gap-2">
+                      {/* Changing someone's role is the common edit; removing
+                          them is the rare one. */}
+                      <select
+                        aria-label={`Role for ${employee.fullName}`}
+                        className="min-h-[--size-touch] rounded-[--radius-md] border border-border-default bg-surface-raised px-2 text-sm text-content-primary"
+                        value={roles.data?.find((r) => r.key === employee.roleKey)?.id ?? ''}
+                        onChange={(event) =>
+                          assign.mutate({ userId: employee.id, roleId: event.target.value })
+                        }
                       >
-                        Remove
-                      </Button>
-                    )}
+                        <option value="" disabled>
+                          No role
+                        </option>
+                        {(roles.data ?? []).map((role) => (
+                          <option key={role.id} value={role.id}>
+                            {role.name}
+                          </option>
+                        ))}
+                      </select>
+                      {employee.isSelf ? null : (
+                        <Button
+                          variant="secondary"
+                          size="md"
+                          loading={remove.isPending && remove.variables === employee.id}
+                          onClick={() => remove.mutate(employee.id)}
+                        >
+                          Remove
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>

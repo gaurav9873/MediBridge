@@ -325,3 +325,91 @@ export interface TenantContext {
   isPlatformOwner: boolean
   mode: BusinessMode | null
 }
+
+/**
+ * The permission catalogue, grouped and in plain words.
+ *
+ * A permissions screen showing `inventory.manage` asks the reader to guess.
+ * These labels are what a pharmacy owner actually chooses between, so they live
+ * beside the keys rather than being invented separately in the UI — a key
+ * without a label here would show up as a blank tick-box, which is the kind of
+ * mistake worth making impossible.
+ *
+ * Platform-only keys are deliberately absent: they are never granted to a
+ * company role, so offering them would be offering something that cannot work.
+ */
+export const PERMISSION_GROUPS: ReadonlyArray<{
+  key: string
+  label: string
+  permissions: ReadonlyArray<{ key: Permission; label: string }>
+}> = [
+  {
+    key: 'general',
+    label: 'General',
+    permissions: [{ key: Permission.DASHBOARD_VIEW, label: 'See the dashboard' }],
+  },
+  {
+    key: 'customers',
+    label: 'Customers',
+    permissions: [
+      { key: Permission.CUSTOMER_VIEW, label: 'See customers' },
+      { key: Permission.CUSTOMER_MANAGE, label: 'Add and edit customers' },
+      { key: Permission.CUSTOMER_APPROVE, label: 'Approve new customers' },
+    ],
+  },
+  {
+    key: 'catalogue',
+    label: 'Medicines and stock',
+    permissions: [
+      { key: Permission.PRODUCT_VIEW, label: 'See the medicine list' },
+      { key: Permission.PRODUCT_MANAGE, label: 'Add and edit medicines' },
+      { key: Permission.INVENTORY_VIEW, label: 'See stock and prices' },
+      { key: Permission.INVENTORY_MANAGE, label: 'Change stock and prices' },
+      { key: Permission.BULK_IMPORT_RUN, label: 'Import from a file' },
+    ],
+  },
+  {
+    key: 'orders',
+    label: 'Orders',
+    permissions: [
+      { key: Permission.ORDER_VIEW, label: 'See orders' },
+      { key: Permission.ORDER_ACCEPT, label: 'Accept orders' },
+      { key: Permission.ORDER_DISPATCH, label: 'Pack and dispatch orders' },
+      { key: Permission.ORDER_CANCEL, label: 'Cancel orders' },
+    ],
+  },
+  {
+    key: 'money',
+    label: 'Payments',
+    permissions: [
+      { key: Permission.PAYMENT_VIEW, label: 'See payments' },
+      { key: Permission.PAYMENT_RECORD, label: 'Record a payment received' },
+      { key: Permission.INVOICE_VIEW, label: 'See invoices' },
+    ],
+  },
+  {
+    key: 'delivery',
+    label: 'Delivery',
+    permissions: [
+      { key: Permission.DELIVERY_VIEW, label: 'See deliveries' },
+      { key: Permission.DELIVERY_MANAGE, label: 'Assign and update deliveries' },
+    ],
+  },
+  {
+    key: 'business',
+    label: 'Business settings',
+    permissions: [
+      { key: Permission.REPORT_VIEW, label: 'See reports' },
+      { key: Permission.EMPLOYEE_VIEW, label: 'See the team' },
+      { key: Permission.EMPLOYEE_MANAGE, label: 'Add and remove team members' },
+      { key: Permission.ROLE_MANAGE, label: 'Manage roles' },
+      { key: Permission.SETTINGS_MANAGE, label: 'Change business settings' },
+      { key: Permission.AUDIT_VIEW, label: 'See the activity log' },
+    ],
+  },
+]
+
+/** Every permission a company role may hold — the catalogue, flattened. */
+export const COMPANY_PERMISSIONS: readonly Permission[] = PERMISSION_GROUPS.flatMap((group) =>
+  group.permissions.map((entry) => entry.key),
+)
