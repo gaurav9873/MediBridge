@@ -110,16 +110,16 @@ All under `/api/v1`. Every response uses the `{ success, data }` envelope.
 | `GET` | `/medicines` | `PRODUCT_VIEW` | any |
 | `GET` | `/medicines/:id` | `PRODUCT_VIEW` | any |
 | `GET` | `/medicines/:id/duplicates` | `PRODUCT_VIEW` | any |
-| `POST` | `/medicines` | `PRODUCT_MANAGE` | `ADMIN` |
-| `PATCH` | `/medicines/:id` | `PRODUCT_MANAGE` | `ADMIN` |
-| `POST` | `/medicines/:id/archive` | `PRODUCT_MANAGE` | `ADMIN` |
-| `POST` | `/medicines/:id/restore` | `PRODUCT_MANAGE` | `ADMIN` |
-| `POST` | `/medicines/merge` | `PRODUCT_MANAGE` | `ADMIN` |
+| `POST` | `/medicines` | `PLATFORM_GLOBAL_CATALOGUE` | platform |
+| `PATCH` | `/medicines/:id` | `PLATFORM_GLOBAL_CATALOGUE` | platform |
+| `POST` | `/medicines/:id/archive` | `PLATFORM_GLOBAL_CATALOGUE` | platform |
+| `POST` | `/medicines/:id/restore` | `PLATFORM_GLOBAL_CATALOGUE` | platform |
+| `POST` | `/medicines/merge` | `PLATFORM_GLOBAL_CATALOGUE` | platform |
 | `GET` | `/medicines/requests/mine` | `PRODUCT_VIEW` | any |
 | `POST` | `/medicines/requests` | `PRODUCT_VIEW` | any |
-| `GET` | `/medicines/requests/pending` | `PRODUCT_MANAGE` | `ADMIN` |
-| `POST` | `/medicines/requests/:id/approve` | `PRODUCT_MANAGE` | `ADMIN` |
-| `POST` | `/medicines/requests/:id/reject` | `PRODUCT_MANAGE` | `ADMIN` |
+| `GET` | `/medicines/requests/pending` | `PLATFORM_GLOBAL_CATALOGUE` | platform |
+| `POST` | `/medicines/requests/:id/approve` | `PLATFORM_GLOBAL_CATALOGUE` | platform |
+| `POST` | `/medicines/requests/:id/reject` | `PLATFORM_GLOBAL_CATALOGUE` | platform |
 
 Query parameters on `GET /medicines`: `search`, `form`, `schedule`,
 `status` (`active` | `archived` | `all`), `page`, `pageSize` (max 100).
@@ -130,10 +130,15 @@ Query parameters on `GET /medicines`: `search`, `form`, `schedule`,
 
 Reading needs `PRODUCT_VIEW` — every seller and buyer has it.
 
-Writing needs `PRODUCT_MANAGE` **and** the `ADMIN` role. The permission alone
-is not enough: `COMPANY_ADMIN` bundles every non-platform key, so every company
-owner holds `PRODUCT_MANAGE` — and this is one catalogue shared by all of them.
-A distributor editing it would be editing everybody's.
+Writing needs `PLATFORM_GLOBAL_CATALOGUE`, which **no company role can hold**.
+`PRODUCT_MANAGE` is not enough and never was: `COMPANY_ADMIN` bundles every
+non-platform key, so every company owner holds it — and this is one catalogue
+shared by all of them, where editing a row edits everybody's.
+
+Two structural things carry that boundary, neither of them a role name:
+`RoleService` refuses to put a `platform.*` key on any company role, and the
+only role holding one is seeded on the platform tenant alone. See
+[ROLES-AND-PERMISSIONS.md](ROLES-AND-PERMISSIONS.md#the-platform-boundary).
 
 A distributor who needs something added asks for it instead. That is what the
 request endpoints are for.

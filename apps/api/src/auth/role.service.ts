@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common'
 import {
   ApiErrorCode,
+  COMPANY_PERMISSIONS,
   PERMISSION_GROUPS,
   Permission,
   type SessionUser,
@@ -97,12 +98,38 @@ export class RoleService {
     }))
   }
 
+  /**
+   * Refuses any permission a company is not allowed to hand out.
+   *
+   * The request body arrives as plain strings — the roles screen sends the set
+   * it wants — so without this a company admin holding ROLE_MANAGE could POST
+   * `["platform.catalogue"]` and grant themselves the global medicine
+   * catalogue. `COMPANY_PERMISSIONS` is derived from the same PERMISSION_GROUPS
+   * the screen renders, so the allowlist and the UI cannot drift apart.
+   */
+  private assertCompanyPermissions(permissions: Permission[]): void {
+    const allowed = new Set<string>(COMPANY_PERMISSIONS)
+    const rejected = permissions.filter((permission) => !allowed.has(permission))
+    if (rejected.length === 0) return
+
+    throw new AppException(ApiErrorCode.FORBIDDEN, {
+      fields: [
+        {
+          field: 'permissions',
+          message:
+            'One of those permissions is reserved for the MediBridge platform team and cannot be given to a company role.',
+        },
+      ],
+    })
+  }
+
   /** Creates a role of this company's own. */
   async create(
     user: SessionUser,
     input: { name: string; permissions: Permission[] },
   ): Promise<RoleSummary[]> {
     const companyId = requireCompany(user)
+    this.assertCompanyPermissions(input.permissions)
     const key = await this.uniqueKey(companyId, input.name)
 
     await this.db.run(async (tx) => {
@@ -141,6 +168,7 @@ export class RoleService {
     input: { name?: string; permissions: Permission[] },
   ): Promise<RoleSummary[]> {
     const companyId = requireCompany(user)
+    this.assertCompanyPermissions(input.permissions)
 
     await this.db.run(async (tx) => {
       const role = await tx.role.findFirst({

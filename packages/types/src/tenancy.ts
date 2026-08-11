@@ -414,6 +414,29 @@ export const COMPANY_PERMISSIONS: readonly Permission[] = PERMISSION_GROUPS.flat
   group.permissions.map((entry) => entry.key),
 )
 
+/** Keys the platform team holds and a company never can. */
+export const PLATFORM_PERMISSIONS: readonly Permission[] = Object.values(Permission).filter(
+  (key) => key.startsWith('platform.'),
+)
+
+/**
+ * The platform team's role.
+ *
+ * Deliberately NOT in `SystemRole`: those seven are created inside every
+ * company, and a role carrying `platform.*` must never exist inside a
+ * distributor's tenant where their own admin could assign it. This one is
+ * seeded for the platform tenant alone.
+ *
+ * It holds every company permission too, because the platform team supports
+ * tenants and needs to see what they see.
+ */
+export const PLATFORM_ROLE_KEY = 'PLATFORM_OWNER'
+export const PLATFORM_ROLE_LABEL = 'Platform Owner'
+export const PLATFORM_ROLE_PERMISSIONS: readonly Permission[] = [
+  ...COMPANY_PERMISSIONS,
+  ...PLATFORM_PERMISSIONS,
+]
+
 /**
  * The things we would tell someone about, in plain words.
  *

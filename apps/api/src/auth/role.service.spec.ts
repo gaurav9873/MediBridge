@@ -1,4 +1,11 @@
-import { COMPANY_PERMISSIONS, PERMISSION_GROUPS, Permission, SYSTEM_ROLE_PERMISSIONS } from '@medibridge/types'
+import {
+  COMPANY_PERMISSIONS,
+  PERMISSION_GROUPS,
+  PLATFORM_PERMISSIONS,
+  PLATFORM_ROLE_PERMISSIONS,
+  Permission,
+  SYSTEM_ROLE_PERMISSIONS,
+} from '@medibridge/types'
 
 /**
  * The permission catalogue is what the roles screen renders and what the guard
@@ -47,6 +54,40 @@ describe('permission catalogue', () => {
         (key) => !key.startsWith('platform.') && !COMPANY_PERMISSIONS.includes(key),
       )
       expect({ role, strays }).toEqual({ role, strays: [] })
+    }
+  })
+
+  /**
+   * The platform boundary.
+   *
+   * The global medicine catalogue is gated on `platform.catalogue`. What keeps
+   * a distributor out of it is not the name of their role — it is that no
+   * company role may carry a platform key at all, and the only role that does
+   * is seeded on the platform tenant. Both halves are asserted here, because
+   * either one alone leaves the catalogue editable by every company owner.
+   */
+  it('keeps platform keys out of every seeded company role', () => {
+    for (const [role, permissions] of Object.entries(SYSTEM_ROLE_PERMISSIONS)) {
+      const platform = permissions.filter((key) => key.startsWith('platform.'))
+      expect({ role, platform }).toEqual({ role, platform: [] })
+    }
+  })
+
+  it('excludes platform keys from what a company may be granted', () => {
+    // RoleService checks incoming permissions against this list. A platform
+    // key leaking into it would let a company admin grant themselves the
+    // shared catalogue, which is one row edited for every tenant at once.
+    for (const key of PLATFORM_PERMISSIONS) {
+      expect(COMPANY_PERMISSIONS).not.toContain(key)
+    }
+    expect(PLATFORM_PERMISSIONS).toContain(Permission.PLATFORM_GLOBAL_CATALOGUE)
+  })
+
+  it('gives the platform role the catalogue key it is the only holder of', () => {
+    expect(PLATFORM_ROLE_PERMISSIONS).toContain(Permission.PLATFORM_GLOBAL_CATALOGUE)
+    // It supports tenants too, so it holds the company keys as well.
+    for (const key of COMPANY_PERMISSIONS) {
+      expect(PLATFORM_ROLE_PERMISSIONS).toContain(key)
     }
   })
 })

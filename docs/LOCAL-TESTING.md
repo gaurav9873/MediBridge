@@ -46,7 +46,7 @@ useful.
 npm run typecheck          # expect: no output
 npx eslint apps packages   # expect: 0 errors (warnings are fine)
 npm run build              # expect: Tasks: 4 successful
-npm run test               # expect: Tests: 38 passed
+npm run test               # expect: Tests: 41 passed
 npm run verify:isolation   # expect: All 16 isolation checks passed
 ```
 
@@ -274,6 +274,10 @@ Sign in as `9000000010` (MedPlus) at `/login`, then **Medicine Requests** on
 
 #### Permission checks
 
+The catalogue is gated on `platform.catalogue`, which **no company role can
+hold** — not on a role name. The seeded admin holds it through `PLATFORM_OWNER`,
+seeded on the MediBridge tenant alone.
+
 With the distributor (`9000000010`) signed in, from Swagger or `curl`:
 
 ```bash
@@ -293,7 +297,16 @@ GET   /medicines/requests/pending
 
 - [ ] All four reads succeed; all five writes return **FORBIDDEN**
 - [ ] A company admin at a distributor holds `PRODUCT_MANAGE` and is *still*
-      refused — the catalogue is shared, so the role is what gates it
+      refused — the catalogue is shared, so `platform.catalogue` gates it
+
+Then try to escalate, still as the distributor:
+
+- [ ] `PATCH /roles/{their COMPANY_ADMIN id}` with
+      `permissions: ["role.manage", "platform.catalogue"]` → **FORBIDDEN**,
+      "reserved for the MediBridge platform team"
+- [ ] `POST /roles` with `permissions: ["platform.catalogue"]` → **FORBIDDEN**
+- [ ] `POST /roles` with `permissions: ["order.view"]` → still works, so the
+      check blocks platform keys rather than role editing
 
 #### Tenant isolation
 
@@ -397,6 +410,21 @@ findable immediately.
 npm run db:seed              # reset the data, keep the schema
 npm run db:reset             # destroy the containers and volumes, start over
 ```
+
+**After `db:seed`, flush Redis.** Seeding truncates and recreates every row, so
+company and user ids change — but tenant resolution, capabilities and
+permissions are cached in Redis against the *old* ids. The symptom is every
+sign-in failing with "That mobile number or password is not correct" while the
+password is perfectly correct, and `Cross-tenant sign-in blocked` in the API
+log naming a company id that no longer exists.
+
+```bash
+docker compose exec redis redis-cli FLUSHALL
+```
+
+**The API does not hot-reload if you started it with `node dist/main.js`.** Use
+`npm run dev` while working, or rebuild and restart after changing API code —
+otherwise you are testing the previous build and will not know it.
 
 ---
 

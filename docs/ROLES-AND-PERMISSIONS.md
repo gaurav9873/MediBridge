@@ -16,6 +16,26 @@ deleted, because the platform assumes they exist. Their **permissions can still
 be changed**: a company knowing its own business better than we do is the normal
 case, not the exception.
 
+## The platform boundary
+
+Four `platform.*` keys — companies, plans, the global catalogue and read-all —
+exist for the MediBridge team and **no company role may hold them**.
+
+That is enforced in two places, both structural rather than by naming:
+
+1. `RoleService` refuses any permission outside `COMPANY_PERMISSIONS`, so a
+   company admin holding `ROLE_MANAGE` cannot POST `["platform.catalogue"]` and
+   grant it to themselves. The request body is plain strings; without this check
+   it was a privilege escalation.
+2. The only role carrying them, `PLATFORM_OWNER`, is seeded on the platform
+   tenant alone — deliberately **not** part of `SystemRole`, which is created
+   inside every company.
+
+This is what gates the global medicine catalogue. `PRODUCT_MANAGE` is not enough
+and never was: `COMPANY_ADMIN` bundles every non-platform key, so every
+distributor's owner holds it, and the catalogue is one shared list where editing
+a row edits everybody's.
+
 ## Two guards worth having
 
 **Company Admin cannot lose "Manage roles".** It is the one permission that can
@@ -32,11 +52,11 @@ and in plain words. It is read from there rather than the database, because
 these are keys the guards check against: a key in the database that no guard
 reads would be a lie on the screen.
 
-`role.service.spec.ts` holds that together — five tests that fail if a
+`role.service.spec.ts` holds that together — eight tests that fail if a
 permission has no label, a label names a key that does not exist, a
-platform-only key is offered to a company, or `COMPANY_ADMIN` loses
-`ROLE_MANAGE`. None of those show up until someone is wrongly allowed or
-wrongly refused.
+platform-only key is offered to a company or reaches a seeded company role, the
+platform role loses the catalogue key, or `COMPANY_ADMIN` loses `ROLE_MANAGE`.
+None of those show up until someone is wrongly allowed or wrongly refused.
 
 ## Performance
 

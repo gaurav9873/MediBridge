@@ -1,7 +1,13 @@
 import { PrismaPg } from '@prisma/adapter-pg'
 import argon2 from 'argon2'
 import { PrismaClient } from '../src/generated/prisma/client'
-import { SYSTEM_ROLE_LABELS, SYSTEM_ROLE_PERMISSIONS } from '@medibridge/types'
+import {
+  PLATFORM_ROLE_KEY,
+  PLATFORM_ROLE_LABEL,
+  PLATFORM_ROLE_PERMISSIONS,
+  SYSTEM_ROLE_LABELS,
+  SYSTEM_ROLE_PERMISSIONS,
+} from '@medibridge/types'
 import { requireDatabaseUrl } from './load-env'
 import { seedMedicines } from './seed/medicines'
 
@@ -117,6 +123,32 @@ async function seedSystemRoles(companyId: string): Promise<void> {
       data: permissions.map((permission) => ({ roleId: role.id, permission })),
     })
   }
+}
+
+/**
+ * The platform team's own role, on the platform tenant only.
+ *
+ * Kept out of `seedSystemRoles` on purpose: that runs for every company, and a
+ * role carrying `platform.*` inside a distributor's tenant would be one their
+ * own admin could assign to themselves. The global medicine catalogue is
+ * gated on these keys, so where the role can exist is the whole control.
+ */
+async function grantPlatformOwner(userId: string): Promise<void> {
+  const role = await prisma.role.create({
+    data: {
+      companyId: COMPANY_ID,
+      key: PLATFORM_ROLE_KEY,
+      name: PLATFORM_ROLE_LABEL,
+      isSystem: true,
+    },
+  })
+  await prisma.rolePermission.createMany({
+    data: PLATFORM_ROLE_PERMISSIONS.map((permission) => ({ roleId: role.id, permission })),
+  })
+  // Replaces the Company Admin assignment createUserWithAddress gives everyone:
+  // the platform team is not a company admin, it is the platform team.
+  await prisma.userRoleAssignment.deleteMany({ where: { userId } })
+  await prisma.userRoleAssignment.create({ data: { userId, roleId: role.id } })
 }
 
 /**
@@ -391,7 +423,8 @@ async function main(): Promise<void> {
     phone: '9000000001',
     email: 'admin@medibridge.in',
   })
-  console.log('  Admin        admin@medibridge.in / 9000000001')
+  await grantPlatformOwner(admin.userId)
+  console.log('  Admin        admin@medibridge.in / 9000000001  (Platform Owner)')
 
   // --- Sellers -----------------------------------------------------------
   // Each distributor is its own tenant, linked to the marketplace. Its staff,

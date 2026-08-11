@@ -2,7 +2,6 @@ import { Body, Controller, Get, HttpCode, HttpStatus, Param, Patch, Post, Query 
 import { ApiOperation, ApiTags } from '@nestjs/swagger'
 import {
   Permission,
-  UserRole,
   type Paginated,
   type SessionUser,
   medicineListSchema,
@@ -12,7 +11,7 @@ import {
   rejectApplicationSchema,
 } from '@medibridge/types'
 import { validate } from '../common/pipes/zod-validation.pipe'
-import { CurrentUser, Roles } from '../auth/auth.guard'
+import { CurrentUser } from '../auth/auth.guard'
 import { RequirePermission } from '../auth/permission.guard'
 import { MedicineRequestService, type MedicineRequestSummary } from './medicine-request.service'
 import { MedicineService, type DuplicateCandidate, type MedicineSummary } from './medicine.service'
@@ -22,11 +21,17 @@ import { MedicineService, type DuplicateCandidate, type MedicineSummary } from '
  *
  * Reading it needs PRODUCT_VIEW — every seller and buyer has that.
  *
- * Changing it needs PRODUCT_MANAGE **and** the ADMIN role. The permission alone
- * is not enough: COMPANY_ADMIN bundles every non-platform key, so every
- * company owner holds PRODUCT_MANAGE — and this is one catalogue shared by all
- * of them. A distributor editing it would be editing everybody's, which is
- * exactly what a test caught before this line existed.
+ * Changing it needs PLATFORM_GLOBAL_CATALOGUE, which no company role can hold.
+ * PRODUCT_MANAGE is not enough and never was: COMPANY_ADMIN bundles every
+ * non-platform key, so every distributor's owner holds it — and this is one
+ * catalogue shared by all of them, where editing a row edits everybody's.
+ *
+ * This used to be guarded by `@Roles(ADMIN)` alongside PRODUCT_MANAGE, which
+ * worked but leaned on a role NAME to express a platform boundary. Two things
+ * now carry it instead, both structural: the permission itself, and the fact
+ * that the only role holding it is seeded on the platform tenant alone —
+ * `RoleService` refuses to put a `platform.*` key on any company role, so a
+ * distributor's admin cannot grant it to themselves.
  *
  * A distributor who needs something added asks for it instead. That is what the
  * request endpoints are.
@@ -54,8 +59,7 @@ export class MedicineController {
     return this.requests.listMine(user)
   }
 
-  @Roles(UserRole.ADMIN)
-  @RequirePermission(Permission.PRODUCT_MANAGE)
+  @RequirePermission(Permission.PLATFORM_GLOBAL_CATALOGUE)
   @Get('requests/pending')
   @ApiOperation({ summary: 'Requests waiting for a decision' })
   async pendingRequests(): Promise<MedicineRequestSummary[]> {
@@ -73,8 +77,7 @@ export class MedicineController {
     return this.requests.request(user, body)
   }
 
-  @Roles(UserRole.ADMIN)
-  @RequirePermission(Permission.PRODUCT_MANAGE)
+  @RequirePermission(Permission.PLATFORM_GLOBAL_CATALOGUE)
   @Post('requests/:id/approve')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Approve a request by adding the medicine' })
@@ -86,8 +89,7 @@ export class MedicineController {
     return this.requests.approve(user, id, body)
   }
 
-  @Roles(UserRole.ADMIN)
-  @RequirePermission(Permission.PRODUCT_MANAGE)
+  @RequirePermission(Permission.PLATFORM_GLOBAL_CATALOGUE)
   @Post('requests/:id/reject')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Refuse a request, with a reason' })
@@ -100,8 +102,7 @@ export class MedicineController {
     return { rejected: true }
   }
 
-  @Roles(UserRole.ADMIN)
-  @RequirePermission(Permission.PRODUCT_MANAGE)
+  @RequirePermission(Permission.PLATFORM_GLOBAL_CATALOGUE)
   @Post('merge')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Merge a duplicate into the medicine that survives' })
@@ -112,8 +113,7 @@ export class MedicineController {
     return this.medicines.merge(user, body)
   }
 
-  @Roles(UserRole.ADMIN)
-  @RequirePermission(Permission.PRODUCT_MANAGE)
+  @RequirePermission(Permission.PLATFORM_GLOBAL_CATALOGUE)
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Add a medicine to the catalogue' })
@@ -138,8 +138,7 @@ export class MedicineController {
     return this.medicines.findDuplicates(id)
   }
 
-  @Roles(UserRole.ADMIN)
-  @RequirePermission(Permission.PRODUCT_MANAGE)
+  @RequirePermission(Permission.PLATFORM_GLOBAL_CATALOGUE)
   @Patch(':id')
   @ApiOperation({ summary: 'Edit a medicine' })
   async update(
@@ -150,8 +149,7 @@ export class MedicineController {
     return this.medicines.update(user, id, body)
   }
 
-  @Roles(UserRole.ADMIN)
-  @RequirePermission(Permission.PRODUCT_MANAGE)
+  @RequirePermission(Permission.PLATFORM_GLOBAL_CATALOGUE)
   @Post(':id/archive')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Take a medicine out of search, keeping its history' })
@@ -162,8 +160,7 @@ export class MedicineController {
     return this.medicines.setArchived(user, id, true)
   }
 
-  @Roles(UserRole.ADMIN)
-  @RequirePermission(Permission.PRODUCT_MANAGE)
+  @RequirePermission(Permission.PLATFORM_GLOBAL_CATALOGUE)
   @Post(':id/restore')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Put an archived medicine back' })
