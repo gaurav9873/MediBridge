@@ -1,4 +1,4 @@
-# Local testing — Phases 2 and 3.1
+# Local testing — Phases 2, 3.1 and 3.2
 
 Everything below runs on your machine. No staging, no cloud, no accounts to
 create anywhere.
@@ -46,7 +46,7 @@ useful.
 npm run typecheck          # expect: no output
 npx eslint apps packages   # expect: 0 errors (warnings are fine)
 npm run build              # expect: Tasks: 4 successful
-npm run test               # expect: Tests: 41 passed
+npm run test               # expect: Tests: 60 passed
 npm run verify:isolation   # expect: All 16 isolation checks passed
 ```
 
@@ -316,7 +316,82 @@ Then try to escalate, still as the distributor:
       other's, though both sit in the same table
 - [ ] The admin queue shows **both**, because it is platform-scoped on purpose
 
-### 4.8 Mobile layout
+### 4.8 Inventory — Phase 3.2
+
+A distributor's own stock. Full detail in [INVENTORY.md](INVENTORY.md).
+
+Sign in as `9000000010` (MedPlus) at `/login`, then go to `/inventory`.
+
+#### Stock list
+
+- [ ] Four tiles: 20 batches listed, 1 running low, 1 expiring soon, stock value ~4.2L
+- [ ] The list is sorted **soonest expiry first**, not newest first
+- [ ] Ciplox 500 shows an amber "60 days left" badge; nothing else carries one
+- [ ] Ondem 4 (6 units) shows **Running low**; everything else shows In stock
+- [ ] Search `azithral` narrows to one row; search `OND4V771` finds it **by batch number**
+- [ ] Stock level = Low stock -> only Ondem 4
+- [ ] Expiry = Expiring within 90 days -> only Ciplox 500
+- [ ] Clear filters restores the full list
+
+#### Add a batch — `/inventory/new`
+
+- [ ] Type `shel` in the medicine box -> Shelcal appears -> pick it, and it stays shown
+- [ ] Search something that does not exist -> offered **Request a new medicine**
+- [ ] Warehouse is pre-selected, because MedPlus has one
+- [ ] Enter an expiry **20 days away** -> refused, "expires too soon to be sold"
+- [ ] Enter a selling price **above** the MRP -> refused under the price box
+- [ ] Fill it in properly (MRP 150.50, price 120.25, quantity 75, warn below 80) -> saved
+- [ ] Back on the list it reads **Running low** (75 available against a threshold of 80)
+      and **20% below MRP** — rupees were converted to paise correctly
+- [ ] Add the same batch number again at the same warehouse -> refused as already listed
+
+#### Edit a batch — `/inventory/[id]`
+
+- [ ] Medicine, batch number, expiry and MRP are shown but **not editable**, with a
+      sentence saying why
+- [ ] Change the price above MRP -> refused inline
+- [ ] Change quantity and price -> saved, and the list reflects it
+- [ ] Switch off **Available to Order** -> the row reads "Retailers cannot order this"
+
+#### Reserved stock
+
+Stock held in a retailer's cart cannot be oversold. Simulate one:
+
+```bash
+docker compose exec postgres psql -U medibridge -d medibridge -c \
+  'UPDATE inventory_items SET "reservedQuantity" = 30 WHERE "batchNumber" = '"'"'DL650B117'"'"';'
+```
+
+- [ ] The Dolo 650 row now shows how much is free to sell versus held
+- [ ] Open it -> a note says 30 units are in retailers' carts
+- [ ] Try to set the quantity **below 30** -> refused, naming the 30 units
+- [ ] Try to **remove** the batch -> refused for the same reason
+- [ ] Set it back to 0 reserved -> both work again
+
+#### Expiring soon — `/inventory/expiring`
+
+- [ ] Ciplox 500 appears under "Expiring within 90 days" with days remaining
+- [ ] With nothing expired, no red panel is shown
+- [ ] **Edit** on a card opens that batch
+
+#### Permission checks
+
+Inventory splits reading from changing, so a sales executive can quote stock
+without repricing it.
+
+- [ ] `/account/roles` -> open **Company Admin** -> untick **"Change stock and prices"** -> save
+- [ ] `/inventory` still loads
+- [ ] **Add Medicine** -> saving returns `FORBIDDEN`
+- [ ] Tick it back -> saving works again on the very next request, with no sign-out
+
+#### Tenant isolation
+
+- [ ] As MedPlus, note a batch id from `/inventory`
+- [ ] Sign in as `9000000011` (Wellness) -> `/inventory` shows **completely different** stock
+- [ ] Open MedPlus's batch id directly, e.g. `/inventory/<that id>` -> **not found**,
+      not "forbidden". The row is invisible, not merely off-limits.
+
+### 4.9 Mobile layout
 
 The quickest honest check is a real phone-sized viewport, not a narrow window.
 
@@ -331,6 +406,7 @@ reachable with a thumb:
 - [ ] `/admin`, `/admin/licences`, `/admin/approvals`, `/admin/users`
 - [ ] `/admin/medicines`, `/admin/medicines/new`, `/admin/medicines/requests`
 - [ ] a medicine's edit, duplicates and merge screens
+- [ ] `/inventory`, `/inventory/new`, `/inventory/expiring`, and a batch's edit screen
 
 Then repeat at **iPad (768px)** and a normal desktop window.
 
@@ -375,7 +451,8 @@ docker compose exec postgres psql -U medibridge -d medibridge -t -c \
 Do not report these as bugs:
 
 - **No ordering.** Cart, checkout, orders and payments are Phase 3. A retailer can search but not buy.
-- **No inventory, ordering or search screens.** Medicine master (Phase 3.1) is built; inventory is 3.2 and the rest follows it.
+- **No ordering or search screens.** Medicine master (3.1) and inventory (3.2) are built; warehouse transfers are 3.3 and the rest follows.
+- **Inventory has no bulk edit and no stock history screen.** See [INVENTORY.md](INVENTORY.md#known-limitations) for that module's full list.
 - **Medicine list sorting is fixed** at name A–Z, and page size at 25. The API supports neither a sort parameter nor a page-size control yet. See [MEDICINE-MASTER.md](MEDICINE-MASTER.md#known-limitations) for the full list of that module's limitations.
 - **No SMS or email actually sends.** Codes appear on screen; notification preferences are stored but nothing dispatches yet.
 - **No super admin account.** `9000000001` is a tenant admin, not a platform owner.
@@ -430,12 +507,12 @@ otherwise you are testing the previous build and will not know it.
 
 ## 7. What "done" looks like
 
-Phase 2 and Phase 3.1 pass locally when:
+Phases 2, 3.1 and 3.2 pass locally when:
 
 - all five automated checks pass
 - every box in section 4 is ticked
 - nothing scrolls sideways at 375px, 390px, 768px or 1280px
 - one tenant cannot see another's anything — including medicine requests
 
-At that point Phase 3.2 can start: inventory, then warehouse, bulk import UI,
-search, cart, orders, payments, delivery and notifications in that order.
+At that point Phase 3.3 can start: warehouse, then bulk import UI, search,
+cart, orders, payments, delivery and notifications in that order.

@@ -8,6 +8,7 @@ import { AdminModule } from './admin/admin.module'
 import { AuthModule } from './auth/auth.module'
 import { BulkModule } from './bulk/bulk.module'
 import { CompanyModule } from './company/company.module'
+import { InventoryModule } from './inventory/inventory.module'
 import { MedicineModule } from './medicine/medicine.module'
 import { ProfileModule } from './profile/profile.module'
 import { OnboardingModule } from './onboarding/onboarding.module'
@@ -64,6 +65,7 @@ const env = loadEnv()
     CompanyModule,
     ProfileModule,
     MedicineModule,
+    InventoryModule,
     HealthModule,
     AdminModule,
     SearchModule,

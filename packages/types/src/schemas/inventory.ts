@@ -1,6 +1,7 @@
 import { copy } from '@medibridge/copy'
 import { z } from 'zod'
 import { DrugSchedule, MedicineForm, SaleUnit } from '../enums.js'
+import { hasMinimumShelfLife } from '../medicine-rules.js'
 import { ALLOWED_GST_RATES, HSN_PATTERN } from '../patterns.js'
 import { paiseSchema, positivePaiseSchema, quantitySchema, timeOfDaySchema } from './common.js'
 
@@ -44,6 +45,15 @@ export type MedicineInput = z.infer<typeof medicineSchema>
 export const inventoryItemSchema = z
   .object({
     medicineId: z.uuid(v.selectRequired('medicine')),
+    /**
+     * Which of the seller's warehouses holds it.
+     *
+     * Stock is physical, so it lives somewhere, and a distributor with a hub
+     * in two cities needs to say which. The service checks the warehouse
+     * belongs to the signed-in company — an id in a request body is a claim,
+     * not a fact.
+     */
+    warehouseId: z.uuid(v.selectRequired('warehouse')),
     batchNumber: z
       .string()
       .trim()
@@ -63,13 +73,13 @@ export const inventoryItemSchema = z
     message: v.price.aboveMrp,
     path: ['sellingPricePaise'],
   })
-  .refine(
-    (item) => {
-      const thirtyDays = 30 * 24 * 60 * 60 * 1000
-      return item.expiryDate.getTime() > Date.now() + thirtyDays
-    },
-    { message: v.date.expiryTooSoon, path: ['expiryDate'] },
-  )
+  // The shelf-life rule itself lives in the medicine domain — this only asks
+  // it. Duplicating "30 days" here is how the form and the service end up
+  // disagreeing about what is listable.
+  .refine((item) => hasMinimumShelfLife(item.expiryDate), {
+    message: v.date.expiryTooSoon,
+    path: ['expiryDate'],
+  })
 export type InventoryItemInput = z.infer<typeof inventoryItemSchema>
 
 /** Partial update — price, stock and availability are the fields that change daily. */
@@ -150,6 +160,26 @@ export const medicineListSchema = z.object({
   pageSize: z.coerce.number().int().min(1).max(100).default(25),
 })
 export type MedicineListQuery = z.infer<typeof medicineListSchema>
+
+/**
+ * Browsing your own stock.
+ *
+ * `stock` and `expiry` are separate filters because they answer separate
+ * questions — "what do I need to reorder?" and "what do I need to shift before
+ * it dies?" — and a batch is routinely one without being the other.
+ */
+export const inventoryListSchema = z.object({
+  search: z.string().trim().max(120).optional(),
+  warehouseId: z.uuid().optional(),
+  stock: z.enum(['all', 'low', 'out']).default('all'),
+  expiry: z.enum(['all', 'expiring', 'expired']).default('all'),
+  /** Archived batches are history; the working view is what can be sold. */
+  status: z.enum(['active', 'inactive', 'all']).default('active'),
+  sortBy: z.enum(['expiry', 'name', 'stock', 'updated']).default('expiry'),
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(25),
+})
+export type InventoryListQuery = z.infer<typeof inventoryListSchema>
 
 /** Merging a duplicate into the row that should survive. */
 export const mergeMedicineSchema = z.object({

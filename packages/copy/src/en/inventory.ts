@@ -31,7 +31,91 @@ export const inventory = {
       lowStock: 'Low stock only',
       expiringSoon: 'Expiring within 90 days',
       outOfStock: 'Out of stock',
+      search: {
+        label: 'Search',
+        helperText: 'Type a medicine name, brand, salt or batch number.',
+        placeholder: 'e.g. Azithral or CRA24A091',
+      } satisfies FieldHelp,
+      warehouse: {
+        label: 'Warehouse',
+        helperText: 'Show stock held at one of your locations.',
+      } satisfies FieldHelp,
+      stock: {
+        label: 'Stock level',
+        helperText: 'Find what needs reordering before a retailer does.',
+      } satisfies FieldHelp,
+      expiry: {
+        label: 'Expiry',
+        helperText: 'Find what to shift or write off before it dies on the shelf.',
+      } satisfies FieldHelp,
+      status: {
+        label: 'Listing',
+        helperText: 'Switched-off batches stay in your list but retailers cannot order them.',
+      } satisfies FieldHelp,
+      sortBy: {
+        label: 'Sort by',
+        helperText: 'Oldest expiry first is usually what you want.',
+      } satisfies FieldHelp,
+      anyWarehouse: 'All warehouses',
+      stockOptions: {
+        all: 'Any level',
+        low: 'Low stock',
+        out: 'Out of stock',
+      },
+      expiryOptions: {
+        all: 'Any date',
+        expiring: 'Expiring within 90 days',
+        expired: 'Already expired',
+      },
+      statusOptions: {
+        active: 'Listed',
+        inactive: 'Switched off',
+        all: 'Both',
+      },
+      sortOptions: {
+        expiry: 'Expiry, soonest first',
+        name: 'Medicine name, A to Z',
+        stock: 'Stock, lowest first',
+        updated: 'Recently changed',
+      },
+      clear: 'Clear filters',
+      activeCount: (count: number) =>
+        count === 1 ? '1 filter applied' : `${count} filters applied`,
     },
+    /** The four numbers a distributor opens the day with. */
+    summary: {
+      totalBatches: 'Batches listed',
+      lowStock: 'Running low',
+      outOfStock: 'Out of stock',
+      expiringSoon: 'Expiring soon',
+      expired: 'Expired',
+      stockValue: 'Stock value',
+      stockValueHint: 'What your sellable stock is worth at your own prices.',
+    },
+    stockLabels: {
+      inStock: 'In stock',
+      lowStock: 'Running low',
+      outOfStock: 'Out of stock',
+    },
+    expiryLabels: {
+      fresh: 'Good',
+      expiringSoon: 'Expiring soon',
+      expired: 'Expired',
+    },
+    /** Reads as a sentence, because "1/7" tells nobody anything. */
+    showing: (from: number, to: number, total: number) =>
+      `Showing ${from}–${to} of ${total.toLocaleString('en-IN')}`,
+    pageOf: (page: number, pages: number) => `Page ${page} of ${pages}`,
+    previous: 'Previous',
+    next: 'Next',
+    reservedNote: (count: number) =>
+      count === 1
+        ? '1 unit is in a retailer’s cart right now'
+        : `${count} units are in retailers’ carts right now`,
+    availableOf: (available: number, total: number) => `${available} of ${total} free to sell`,
+    editCta: 'Edit',
+    expiringCta: 'Expiring Soon',
+    notSellable: 'Retailers cannot order this',
     empty: {
       title: 'You have not added any stock yet',
       body: 'Retailers cannot find you until you list what you have. Add your first medicine to start receiving orders.',
@@ -95,6 +179,10 @@ export const inventory = {
           'We keep one shared list of medicines so retailers can compare prices properly. If you cannot find yours, tap "Request a new medicine" and our team will add it within one working day.',
       } satisfies FieldHelp,
       requestMedicine: 'Cannot find it? Request a new medicine',
+      warehouse: {
+        label: 'Warehouse',
+        helperText: 'Which of your locations physically holds this batch.',
+      } satisfies FieldHelp,
       batchNumber: {
         label: 'Batch Number',
         helperText: 'Enter the batch number printed on the pack.',
@@ -153,7 +241,71 @@ export const inventory = {
     confirmDelete: {
       title: 'Remove this item from your stock?',
       body: 'Retailers will no longer see it. Orders already placed are not affected.',
+      confirmLabel: 'Remove it',
     },
+    deleteCta: 'Remove from stock',
+    /** Explains why three fields are read-only on the edit screen. */
+    identityLocked:
+      'The medicine, batch number and expiry date identify the physical goods, so they cannot be edited. If one is wrong, remove this batch and list it again.',
+    /** Stock is physical, so it needs somewhere to live before it can exist. */
+    noWarehouse: {
+      title: 'Add a warehouse before adding stock',
+      body: 'Stock is held somewhere physical, so we need at least one location before you can list any. Add one under Business settings and come back.',
+      cta: 'Go to Business settings',
+    },
+    submitCreate: 'Add to My Stock',
+    submitEdit: 'Save Changes',
+    cancel: 'Cancel',
+    priceAboveMrp: 'Your price cannot be more than the MRP printed on the pack.',
+    marginNote: (percent: number) =>
+      percent > 0 ? `${percent}% below MRP` : 'Priced at MRP',
+    createHelp: {
+      whatIsThis:
+        'Add one batch of one medicine. Retailers near you can order it as soon as you save, so the price and quantity here are what they will see.',
+      topics: [
+        {
+          question: 'Why one batch at a time?',
+          answer:
+            'Because the batch number and expiry date have to be right on every unit you sell. Two batches of the same medicine are two rows, and that is correct.',
+        },
+        {
+          question: 'I cannot find the medicine in the list.',
+          answer:
+            'The medicine list is shared and kept by our team so retailers can compare prices properly. Ask for it from Medicine Requests and it is usually added within a working day.',
+        },
+        {
+          question: 'Why will it not accept my expiry date?',
+          answer:
+            'A batch needs at least 30 days of shelf life left to be listed. A pharmacy cannot sell it in time otherwise, and it comes back as a return.',
+        },
+        {
+          question: 'What is the minimum order quantity for?',
+          answer:
+            'The smallest amount a retailer may buy in one order. Use it for things you only sell by the box. Leave it at 1 otherwise.',
+        },
+      ],
+    } satisfies PageHelp,
+    editHelp: {
+      whatIsThis:
+        'Change your price, your stock count or whether retailers can order this batch at all. Changes are live immediately.',
+      topics: [
+        {
+          question: 'Why can I not change the batch number or expiry?',
+          answer:
+            'Those identify the physical goods on your shelf. If one is wrong, remove this batch and add it again with the right details.',
+        },
+        {
+          question: 'It will not let me reduce the quantity.',
+          answer:
+            'Some units are in retailers’ carts right now. You cannot count below what has already been promised. Try again once those orders are placed or expire.',
+        },
+        {
+          question: 'How do I stop selling this without deleting it?',
+          answer:
+            'Switch off "Available to Order". The batch stays in your list with its history, and retailers stop seeing it.',
+        },
+      ],
+    } satisfies PageHelp,
   },
 
   bulkUpload: {
@@ -187,7 +339,42 @@ export const inventory = {
       title: 'Expiring Soon',
       subtitle: 'Batches expiring within the next 90 days. Sell or return these first.',
     } satisfies PageMeta,
-    daysLeft: (days: number) => (days === 1 ? '1 day left' : `${days} days left`),
+    daysLeft: (days: number) =>
+      days < 0
+        ? days === -1
+          ? 'Expired yesterday'
+          : `Expired ${Math.abs(days)} days ago`
+        : days === 0
+          ? 'Expires today'
+          : days === 1
+            ? '1 day left'
+            : `${days} days left`,
+    backToStock: 'All Stock',
+    expiredHeading: 'Already expired',
+    expiredBody:
+      'These cannot be sold. Remove them from your stock list once they are off the shelf.',
+    expiringHeading: 'Expiring within 90 days',
+    help: {
+      whatIsThis:
+        'Batches close to their expiry date, soonest first. Discount them, move them, or return them to the manufacturer while there is still time.',
+      topics: [
+        {
+          question: 'Why 90 days?',
+          answer:
+            'It is roughly the point where a retailer can still sell the stock through before it expires. Later than that and they will not take it.',
+        },
+        {
+          question: 'Can retailers still order expiring stock?',
+          answer:
+            'Yes, until the day it expires. After that we stop showing it in search automatically.',
+        },
+        {
+          question: 'What should I do with expired batches?',
+          answer:
+            'Take them off your shelf and remove them here, so your stock value and counts stay honest.',
+        },
+      ],
+    } satisfies PageHelp,
     empty: {
       title: 'Nothing is expiring soon',
       body: 'None of your batches expire in the next 90 days. We will tell you here as soon as one does.',

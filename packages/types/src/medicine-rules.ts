@@ -63,6 +63,53 @@ export function blockedReason(schedule: DrugSchedule): string | null {
 }
 
 // ---------------------------------------------------------------------------
+// Expiry
+// ---------------------------------------------------------------------------
+
+/**
+ * A batch must have at least this much shelf life left to be listed.
+ *
+ * A pharmacy that receives stock expiring in a fortnight cannot sell it before
+ * it dies on their shelf, so listing it is not a bargain — it is a complaint
+ * and a return. Thirty days is the floor the inventory schema enforces on
+ * creation; it deliberately does not apply to an existing batch, which is
+ * allowed to age out of sellability while staying on the books.
+ */
+export const MINIMUM_SHELF_LIFE_DAYS = 30
+
+/** How far ahead a distributor is warned, so there is time to discount it. */
+export const EXPIRY_WARNING_DAYS = 90
+
+/** Whole days from `now` to `expiry`. Negative once it has passed. */
+export function daysUntilExpiry(expiry: Date, now: Date = new Date()): number {
+  // Compare calendar days, not instants: a batch expiring today at 00:00 and
+  // checked at 09:00 has 0 days left, not -1.
+  const startOfDay = (date: Date): number =>
+    Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate())
+  return Math.round((startOfDay(expiry) - startOfDay(now)) / 86_400_000)
+}
+
+export type ExpiryStatus = 'expired' | 'expiringSoon' | 'fresh'
+
+/**
+ * Where a batch stands against its expiry date.
+ *
+ * The key names match `stockPresentation` in the design system, so a status
+ * never has to be translated into an icon and a colour at the call site.
+ */
+export function expiryStatus(expiry: Date, now: Date = new Date()): ExpiryStatus {
+  const days = daysUntilExpiry(expiry, now)
+  if (days < 0) return 'expired'
+  if (days <= EXPIRY_WARNING_DAYS) return 'expiringSoon'
+  return 'fresh'
+}
+
+/** Whether a batch is fresh enough to be listed for the first time. */
+export function hasMinimumShelfLife(expiry: Date, now: Date = new Date()): boolean {
+  return daysUntilExpiry(expiry, now) >= MINIMUM_SHELF_LIFE_DAYS
+}
+
+// ---------------------------------------------------------------------------
 // Identity
 // ---------------------------------------------------------------------------
 
