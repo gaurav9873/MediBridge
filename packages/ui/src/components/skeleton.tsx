@@ -13,7 +13,7 @@ import { cn } from '../lib/cn'
 export function Skeleton({ className }: { className?: string }): React.JSX.Element {
   return (
     <div
-      className={cn('animate-pulse rounded-[--radius-md] bg-surface-hover', className)}
+      className={cn('animate-pulse rounded-(--radius-md) bg-surface-hover', className)}
       aria-hidden
     />
   )
@@ -27,7 +27,7 @@ export function TableSkeleton({ rows = 5 }: { rows?: number }): React.JSX.Elemen
       {Array.from({ length: rows }, (_, index) => (
         <div
           key={index}
-          className="flex items-center gap-4 rounded-[--radius-lg] border border-border-default bg-surface p-4"
+          className="flex items-center gap-4 rounded-(--radius-lg) border border-border-default bg-surface p-4"
         >
           <Skeleton className="h-10 w-10 shrink-0 rounded-full" />
           <div className="flex flex-1 flex-col gap-2">
@@ -48,7 +48,7 @@ export function CardSkeleton({ count = 3 }: { count?: number }): React.JSX.Eleme
       {Array.from({ length: count }, (_, index) => (
         <div
           key={index}
-          className="flex flex-col gap-3 rounded-[--radius-lg] border border-border-default bg-surface p-4"
+          className="flex flex-col gap-3 rounded-(--radius-lg) border border-border-default bg-surface p-4"
         >
           <Skeleton className="h-4 w-2/3" />
           <Skeleton className="h-3 w-1/2" />

@@ -153,7 +153,7 @@ export default function ApprovalsPage(): React.JSX.Element {
                           return (
                             <li
                               key={document.id}
-                              className="flex flex-wrap items-center gap-3 rounded-[--radius-md] border border-border-default bg-surface-sunken p-3"
+                              className="flex flex-wrap items-center gap-3 rounded-(--radius-md) border border-border-default bg-surface-sunken p-3"
                             >
                               <FileText
                                 className="size-5 shrink-0 text-content-muted"
@@ -181,7 +181,7 @@ export default function ApprovalsPage(): React.JSX.Element {
 
                     {/* --- the checklist, in front of the person deciding --- */}
                     {isPending && (
-                      <section className="flex flex-col gap-2 rounded-[--radius-md] bg-info-50 p-4">
+                      <section className="flex flex-col gap-2 rounded-(--radius-md) bg-info-50 p-4">
                         <h3 className="text-sm font-semibold text-info-900">
                           {c.checklistHeading}
                         </h3>

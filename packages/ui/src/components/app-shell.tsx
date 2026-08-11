@@ -49,7 +49,7 @@ export function BottomNav({
         'pb-safe md:hidden',
       )}
     >
-      <ul className="flex h-[--height-bottom-nav] items-stretch">
+      <ul className="flex h-(--height-bottom-nav) items-stretch">
         {mobileItems.map((item) => {
           const active = currentPath === item.href || currentPath.startsWith(`${item.href}/`)
           return (
@@ -136,7 +136,7 @@ export function Sidebar({
                   <span
                     aria-disabled="true"
                     className={cn(
-                      'flex min-h-[--size-touch] items-center gap-3 rounded-[--radius-md] px-3',
+                      'flex min-h-(--size-touch) items-center gap-3 rounded-(--radius-md) px-3',
                       'text-base font-medium text-content-muted opacity-60',
                       '[&_svg]:size-5 [&_svg]:shrink-0',
                     )}
@@ -165,7 +165,7 @@ export function Sidebar({
                   }
                   aria-current={active ? 'page' : undefined}
                   className={cn(
-                    'flex min-h-[--size-touch] items-center gap-3 rounded-[--radius-md] px-3',
+                    'flex min-h-(--size-touch) items-center gap-3 rounded-(--radius-md) px-3',
                     'text-base font-medium transition-colors',
                     '[&_svg]:size-5 [&_svg]:shrink-0',
                     active
@@ -210,7 +210,7 @@ export function StickyActionBar({
     <div
       className={cn(
         'fixed inset-x-0 z-20 border-t border-border-default bg-surface p-3 shadow-raised',
-        'pb-safe bottom-[--height-bottom-nav] sm:hidden',
+        'pb-safe bottom-(--height-bottom-nav) sm:hidden',
         className,
       )}
     >
@@ -249,7 +249,7 @@ export function AppShell({
 
       <div className="flex min-w-0 flex-1 flex-col">
         {topBar && (
-          <header className="sticky top-0 z-20 flex h-[--height-app-bar] items-center border-b border-border-default bg-surface px-4">
+          <header className="sticky top-0 z-20 flex h-(--height-app-bar) items-center border-b border-border-default bg-surface px-4">
             {topBar}
           </header>
         )}

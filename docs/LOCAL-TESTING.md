@@ -1,4 +1,4 @@
-# Local testing — Phase 2
+# Local testing — Phases 2 and 3.1
 
 Everything below runs on your machine. No staging, no cloud, no accounts to
 create anywhere.
@@ -46,7 +46,7 @@ useful.
 npm run typecheck          # expect: no output
 npx eslint apps packages   # expect: 0 errors (warnings are fine)
 npm run build              # expect: Tasks: 4 successful
-npm run test               # expect: Tests: 17 passed
+npm run test               # expect: Tests: 38 passed
 npm run verify:isolation   # expect: All 16 isolation checks passed
 ```
 
@@ -181,7 +181,129 @@ Sign in as `9000000021` (Kumar Pharmacy).
 
 > Re-seed afterwards to restore `9000000021`.
 
-### 4.7 Mobile layout
+### 4.7 Medicine master — Phase 3.1
+
+The shared catalogue and its six screens. Full detail in
+[MEDICINE-MASTER.md](MEDICINE-MASTER.md).
+
+Sign in as the admin (`9000000001`) at `/admin/login` unless a step says
+otherwise.
+
+#### Browse, search and filter — `/admin/medicines`
+
+- [ ] The list loads 25 medicines, sorted A–Z, with "Showing 1–25 of 54"
+- [ ] Type `dolo` in Search → narrows to Dolo 650 without a full-page skeleton
+- [ ] Type `zzzz` → the empty state says **"No medicines match what you are
+      looking for"** (not "no medicines yet") and offers **Clear filters**
+- [ ] Set Type = Syrup → 2 results; set Drug Schedule = Schedule H → 29
+- [ ] Set Status = Archived → only archived rows; Status = Both → everything
+- [ ] **Next** / **Previous** move through pages; Previous is disabled on page 1
+- [ ] Changing any filter resets you to page 1 (never "page 4 of 1")
+
+#### Add — `/admin/medicines/new`
+
+- [ ] Every field has a label, a one-line explanation and, where useful, an example
+- [ ] Submit empty → friendly messages per field, nothing technical
+- [ ] HSN code `12` → **"Please enter a valid 4 to 8 digit HSN code."**
+- [ ] Set Drug Schedule = Schedule H → "Needs a Prescription" ticks itself and
+      locks, with a sentence saying why
+- [ ] Set Drug Schedule = Schedule X → a red panel explains the Form 2C register
+      and the submit button is disabled
+- [ ] Add `Dolo 650` / brand `Dolo` / strength `650mg` / pack `15 tablets` →
+      refused **under the name field** with "…is already in the catalogue…"
+- [ ] Add something genuinely new → toast, and you land on its edit screen
+
+#### Edit, archive and restore — `/admin/medicines/[id]`
+
+- [ ] Open Dolo 650 → form prefilled, status badge, "2 distributors stock this"
+- [ ] Rename it to an existing medicine's exact identity → refused with
+      "Merge them instead of keeping both."
+- [ ] **Archive** → the confirmation warns about the 2 sellers holding stock,
+      and confirming is refused with a sentence naming the count
+- [ ] Archive a medicine nobody stocks → succeeds; the banner says it is archived
+- [ ] **Restore** → it comes back
+
+#### Duplicate review — `/admin/medicines/[id]/duplicates`
+
+Set this up first, as the admin:
+
+```bash
+# Add a near-duplicate of Dolo 650 from Swagger, or:
+#   POST /medicines  { "name":"Dolo-650","brand":"Micro Labs",
+#     "composition":"Paracetamol 650mg","form":"TABLET","strength":"650 mg",
+#     "hsnCode":"30049099","gstRate":12,"schedule":"NONE" }
+```
+
+- [ ] Open the new medicine → **Check duplicates** → Dolo 650 appears, tagged
+      "Looks similar" with a percentage
+- [ ] A medicine with no near-misses shows "Nothing looks like a duplicate"
+- [ ] Nothing on this screen changes any data
+
+#### Merge — `/admin/medicines/[id]/merge/[otherId]`
+
+- [ ] **Compare and merge** shows both rows field by field
+- [ ] Fields that differ are tinted; identical ones are not
+- [ ] **Swap which one is kept** exchanges the two panels
+- [ ] Confirming shows a dialog naming both medicines and the stock to move
+- [ ] After merging: the survivor keeps the stock, the other is **archived**
+      (search for it with Status = Archived — it is not deleted)
+- [ ] Merging a medicine into itself is refused
+
+#### Requests — distributor side
+
+Sign in as `9000000010` (MedPlus) at `/login`, then **Medicine Requests** on
+`/account`.
+
+- [ ] Ask for `Dolo 650` / brand `Dolo` → answered immediately with **"Good news
+      — this is already on the list"**, no queue, no waiting
+- [ ] Ask for something genuinely missing → toast, and it appears as
+      **"Being checked"**
+- [ ] Name and brand are required; everything else is marked optional
+
+#### Requests — admin side — `/admin/medicines/requests`
+
+- [ ] The queue shows both tenants' requests, oldest first, with who asked and
+      from which company
+- [ ] **Refuse** with a 3-character reason → refused, "at least 10 characters"
+- [ ] **Refuse** with a real sentence → the request leaves the queue
+- [ ] **Add to the list** opens the full add form, prefilled, with "What was
+      requested" shown above it
+- [ ] Completing it creates the medicine and lands you on it
+- [ ] Back as the distributor: the approved one reads **"Added to the list"**,
+      the refused one shows your reason **verbatim**
+
+#### Permission checks
+
+With the distributor (`9000000010`) signed in, from Swagger or `curl`:
+
+```bash
+# allowed — every seller and buyer can read the catalogue
+GET  /medicines
+GET  /medicines/{id}/duplicates
+GET  /medicines/requests/mine
+POST /medicines/requests
+
+# refused with FORBIDDEN — writing needs PRODUCT_MANAGE *and* the ADMIN role
+POST  /medicines
+PATCH /medicines/{id}
+POST  /medicines/{id}/archive
+POST  /medicines/merge
+GET   /medicines/requests/pending
+```
+
+- [ ] All four reads succeed; all five writes return **FORBIDDEN**
+- [ ] A company admin at a distributor holds `PRODUCT_MANAGE` and is *still*
+      refused — the catalogue is shared, so the role is what gates it
+
+#### Tenant isolation
+
+- [ ] As MedPlus (`9000000010`), `/account/medicine-requests` shows **only**
+      MedPlus requests
+- [ ] As Wellness (`9000000011`), **only** Wellness requests — neither sees the
+      other's, though both sit in the same table
+- [ ] The admin queue shows **both**, because it is platform-scoped on purpose
+
+### 4.8 Mobile layout
 
 The quickest honest check is a real phone-sized viewport, not a narrow window.
 
@@ -192,9 +314,21 @@ reachable with a thumb:
 
 - [ ] `/login`, `/signup`, `/forgot-password`, `/login/otp`
 - [ ] `/account`, `/account/profile`, `/account/company`, `/account/team`, `/account/roles`
+- [ ] `/account/medicine-requests`, `/account/medicine-requests/new`
 - [ ] `/admin`, `/admin/licences`, `/admin/approvals`, `/admin/users`
+- [ ] `/admin/medicines`, `/admin/medicines/new`, `/admin/medicines/requests`
+- [ ] a medicine's edit, duplicates and merge screens
 
 Then repeat at **iPad (768px)** and a normal desktop window.
+
+On the medicine screens specifically:
+
+- [ ] The list is **stacked cards**, not a squeezed table
+- [ ] The primary action (**Add Medicine**, **Send Request**, **Merge them**)
+      sits in a bar at the bottom of the screen, above the navigation
+- [ ] The merge comparison stacks the two medicines vertically, keeping the one
+      being kept first
+- [ ] Every button and input is at least 44px tall
 
 ### 4.8 Tenant isolation — the one that matters most
 
@@ -228,7 +362,8 @@ docker compose exec postgres psql -U medibridge -d medibridge -t -c \
 Do not report these as bugs:
 
 - **No ordering.** Cart, checkout, orders and payments are Phase 3. A retailer can search but not buy.
-- **No medicine add/edit screen.** The medicine master UI is Phase 3; today medicines change through bulk import.
+- **No inventory, ordering or search screens.** Medicine master (Phase 3.1) is built; inventory is 3.2 and the rest follows it.
+- **Medicine list sorting is fixed** at name A–Z, and page size at 25. The API supports neither a sort parameter nor a page-size control yet. See [MEDICINE-MASTER.md](MEDICINE-MASTER.md#known-limitations) for the full list of that module's limitations.
 - **No SMS or email actually sends.** Codes appear on screen; notification preferences are stored but nothing dispatches yet.
 - **No super admin account.** `9000000001` is a tenant admin, not a platform owner.
 - **The web app ignores tenant branding.** The endpoint works; the UI does not use it yet.
@@ -267,12 +402,12 @@ npm run db:reset             # destroy the containers and volumes, start over
 
 ## 7. What "done" looks like
 
-Phase 2 passes locally when:
+Phase 2 and Phase 3.1 pass locally when:
 
 - all five automated checks pass
 - every box in section 4 is ticked
-- nothing scrolls sideways at 375px
-- one tenant cannot see another's anything
+- nothing scrolls sideways at 375px, 390px, 768px or 1280px
+- one tenant cannot see another's anything — including medicine requests
 
-At that point Phase 3 can start: medicine master, inventory, warehouse, bulk
-import UI, search, cart, orders, payments, delivery, notifications.
+At that point Phase 3.2 can start: inventory, then warehouse, bulk import UI,
+search, cart, orders, payments, delivery and notifications in that order.

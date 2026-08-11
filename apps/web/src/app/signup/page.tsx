@@ -141,7 +141,7 @@ export default function SignUpPage(): React.JSX.Element {
               return (
                 <label
                   key={option.value}
-                  className={`flex cursor-pointer flex-col gap-0.5 rounded-[--radius-lg] border p-3 text-left transition ${
+                  className={`flex cursor-pointer flex-col gap-0.5 rounded-(--radius-lg) border p-3 text-left transition ${
                     selected
                       ? 'border-brand-600 bg-brand-50 dark:bg-brand-950'
                       : 'border-border-default hover:border-border-strong'

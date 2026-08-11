@@ -55,7 +55,7 @@ export function HelpPanel({
           className={cn(
             'fixed z-50 flex flex-col bg-surface shadow-overlay',
             // Mobile: a bottom sheet, capped so the page stays visible behind.
-            'inset-x-0 bottom-0 max-h-[85vh] rounded-t-[--radius-xl]',
+            'inset-x-0 bottom-0 max-h-[85vh] rounded-t-(--radius-xl)',
             // Desktop: a right-hand drawer.
             'sm:inset-y-0 sm:right-0 sm:left-auto sm:max-h-none sm:w-[26rem] sm:rounded-none',
             'data-[state=open]:animate-in data-[state=closed]:animate-out',
@@ -96,11 +96,11 @@ export function HelpPanel({
                   {help.topics.map((topic) => (
                     <details
                       key={topic.question}
-                      className="group rounded-[--radius-md] border border-border-default bg-surface-sunken"
+                      className="group rounded-(--radius-md) border border-border-default bg-surface-sunken"
                     >
                       <summary
                         className={cn(
-                          'flex min-h-[--size-touch] cursor-pointer items-center px-4 py-3',
+                          'flex min-h-(--size-touch) cursor-pointer items-center px-4 py-3',
                           'text-base font-medium text-content-primary',
                           'group-open:pb-2 marker:content-[""]',
                         )}
@@ -124,7 +124,7 @@ export function HelpPanel({
               </Dialog.Close>
             )}
 
-            <section className="mt-auto flex flex-col gap-2 rounded-[--radius-lg] bg-brand-50 p-4">
+            <section className="mt-auto flex flex-col gap-2 rounded-(--radius-lg) bg-brand-50 p-4">
               <h3 className="flex items-center gap-2 text-base font-semibold text-brand-900">
                 <Phone className="size-4" aria-hidden />
                 {c.stillStuck}

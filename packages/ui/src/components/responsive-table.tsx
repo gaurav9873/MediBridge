@@ -63,7 +63,7 @@ export function ResponsiveTable<T>({
   return (
     <div className={className}>
       {/* ---------- Desktop: a real table, horizontally scrollable ---------- */}
-      <div className="scroll-x hidden rounded-[--radius-lg] border border-border-default bg-surface md:block">
+      <div className="scroll-x hidden rounded-(--radius-lg) border border-border-default bg-surface md:block">
         <table className="w-full border-collapse text-base">
           {caption && <caption className="sr-only">{caption}</caption>}
           <thead>
@@ -139,7 +139,7 @@ export function ResponsiveTable<T>({
                 tabIndex={interactive ? 0 : undefined}
                 role={interactive ? 'button' : undefined}
                 className={cn(
-                  'flex flex-col gap-3 rounded-[--radius-lg] border border-border-default',
+                  'flex flex-col gap-3 rounded-(--radius-lg) border border-border-default',
                   'bg-surface p-4 shadow-card',
                   interactive && 'active:bg-surface-hover',
                 )}

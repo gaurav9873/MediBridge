@@ -109,8 +109,8 @@ export function FormField({
 /** Shared visual treatment for every text-like control. */
 const controlClasses = (invalid: boolean): string =>
   cn(
-    'w-full rounded-[--radius-md] border bg-surface px-3 py-2.5',
-    'min-h-[--size-touch] text-base text-content-primary',
+    'w-full rounded-(--radius-md) border bg-surface px-3 py-2.5',
+    'min-h-(--size-touch) text-base text-content-primary',
     'placeholder:text-content-muted',
     'transition-colors',
     'disabled:cursor-not-allowed disabled:bg-surface-sunken disabled:opacity-60',
@@ -295,7 +295,7 @@ export const CheckboxField = React.forwardRef<HTMLInputElement, CheckboxFieldPro
         {/* The whole row is the tap target, not just the 20px box. */}
         <label
           htmlFor={inputId}
-          className="flex min-h-[--size-touch] cursor-pointer items-start gap-3 py-1"
+          className="flex min-h-(--size-touch) cursor-pointer items-start gap-3 py-1"
         >
           <input
             ref={ref}
@@ -305,7 +305,7 @@ export const CheckboxField = React.forwardRef<HTMLInputElement, CheckboxFieldPro
             aria-invalid={invalid || undefined}
             required={required}
             className={cn(
-              'mt-0.5 size-5 shrink-0 rounded-[--radius-sm] border-2 accent-brand-600',
+              'mt-0.5 size-5 shrink-0 rounded-(--radius-sm) border-2 accent-brand-600',
               invalid ? 'border-danger-600' : 'border-border-strong',
             )}
             {...props}

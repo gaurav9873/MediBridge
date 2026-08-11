@@ -1,9 +1,13 @@
 import { DrugSchedule, MedicineForm } from '@medibridge/types'
 import {
+  type ComparableMedicine,
   DUPLICATE_THRESHOLD,
+  blankAsAbsent,
   describeMedicine,
   isSellable,
+  medicineDifferences,
   medicineKey,
+  normaliseMedicineOptionals,
   requiresPrescription,
   similarity,
 } from '@medibridge/types'
@@ -91,6 +95,86 @@ describe('probable duplicates', () => {
 
   it('is symmetric', () => {
     expect(similarity('Dolo 650', 'Dolo-650')).toBeCloseTo(similarity('Dolo-650', 'Dolo 650'))
+  })
+})
+
+describe('blank optional fields', () => {
+  it('treats empty and whitespace-only text as absent', () => {
+    expect(blankAsAbsent('')).toBeUndefined()
+    expect(blankAsAbsent('   ')).toBeUndefined()
+    expect(blankAsAbsent(null)).toBeUndefined()
+    expect(blankAsAbsent(undefined)).toBeUndefined()
+  })
+
+  it('trims what it keeps', () => {
+    expect(blankAsAbsent('  650mg ')).toBe('650mg')
+  })
+
+  it('keeps the identity key and the unique constraint agreeing', () => {
+    // The whole point. medicineKey() reads '' and null as the same medicine;
+    // Postgres reads them as two different rows. Normalising first is what
+    // stops an untouched input box creating a second copy of one medicine.
+    const typed = normaliseMedicineOptionals({
+      name: 'Dolo 650',
+      brand: 'Micro Labs',
+      strength: '',
+      packSize: '   ',
+      manufacturer: '',
+    })
+
+    expect(typed.strength).toBeUndefined()
+    expect(typed.packSize).toBeUndefined()
+    expect(typed.manufacturer).toBeUndefined()
+    expect(medicineKey(typed)).toBe(
+      medicineKey({ name: 'Dolo 650', brand: 'Micro Labs', strength: null, packSize: null }),
+    )
+  })
+
+  it('leaves the fields that are not optional text alone', () => {
+    const input = { name: ' Dolo 650 ', brand: 'Micro Labs', strength: '650mg' }
+    expect(normaliseMedicineOptionals(input).name).toBe(' Dolo 650 ')
+  })
+})
+
+describe('comparing two medicines before a merge', () => {
+  const base: ComparableMedicine = {
+    name: 'Dolo 650',
+    brand: 'Micro Labs',
+    composition: 'Paracetamol 650mg',
+    form: MedicineForm.TABLET,
+    strength: '650mg',
+    packSize: '15 tablets',
+    manufacturer: 'Micro Labs Ltd',
+    hsnCode: '30049099',
+    gstRate: 12,
+    schedule: DrugSchedule.NONE,
+    isPrescriptionRequired: false,
+  }
+
+  it('finds nothing to report when two rows are identical', () => {
+    expect(medicineDifferences(base, { ...base })).toEqual([])
+  })
+
+  it('reports every field that genuinely differs', () => {
+    const other = { ...base, name: 'Dolo-650', gstRate: 5, schedule: DrugSchedule.H }
+    expect(medicineDifferences(base, other).sort()).toEqual(['gstRate', 'name', 'schedule'])
+  })
+
+  it('does not call a missing optional field a difference against an empty one', () => {
+    // Noise here is not harmless: highlighting a non-difference on a screen
+    // that cannot be undone teaches people to ignore the highlighting.
+    const left = { ...base, packSize: null, manufacturer: '' }
+    const right = { ...base, packSize: '', manufacturer: undefined }
+    expect(medicineDifferences(left, right)).toEqual([])
+  })
+
+  it('still reports an optional field that has two real values', () => {
+    expect(medicineDifferences(base, { ...base, packSize: '10 tablets' })).toEqual(['packSize'])
+  })
+
+  it('is symmetric, so swapping which row is kept changes nothing', () => {
+    const other = { ...base, brand: 'Cipla', isPrescriptionRequired: true }
+    expect(medicineDifferences(base, other)).toEqual(medicineDifferences(other, base))
   })
 })
 

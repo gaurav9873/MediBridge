@@ -16,7 +16,7 @@ export function Card({
   return (
     <Component
       className={cn(
-        'rounded-[--radius-lg] border border-border-default bg-surface shadow-card',
+        'rounded-(--radius-lg) border border-border-default bg-surface shadow-card',
         className,
       )}
     >
@@ -105,7 +105,7 @@ export function StatTile({
   )
 
   const classes = cn(
-    'flex flex-col gap-1 rounded-[--radius-lg] border bg-surface p-4 shadow-card',
+    'flex flex-col gap-1 rounded-(--radius-lg) border bg-surface p-4 shadow-card',
     tone === 'urgent' ? 'border-warning-500' : 'border-border-default',
     href && 'transition-colors hover:bg-surface-hover',
   )

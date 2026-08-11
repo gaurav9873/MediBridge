@@ -55,7 +55,7 @@ export function Alert({
     <div
       role={assertive ? 'alert' : 'status'}
       className={cn(
-        'flex flex-col gap-3 rounded-[--radius-lg] border p-4 sm:flex-row sm:items-start',
+        'flex flex-col gap-3 rounded-(--radius-lg) border p-4 sm:flex-row sm:items-start',
         style.container,
         className,
       )}

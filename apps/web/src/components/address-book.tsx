@@ -91,7 +91,7 @@ export function AddressBook(): React.JSX.Element {
             {(addresses.data ?? []).map((address) => (
               <div
                 key={address.id}
-                className="flex flex-col gap-3 rounded-[--radius-lg] border border-border-default p-3 sm:flex-row sm:items-start sm:justify-between"
+                className="flex flex-col gap-3 rounded-(--radius-lg) border border-border-default p-3 sm:flex-row sm:items-start sm:justify-between"
               >
                 <div className="flex flex-col gap-0.5">
                   <span className="text-sm font-medium text-content-primary">
@@ -200,7 +200,7 @@ function AddAddressForm({ onDone }: { onDone: () => void }): React.JSX.Element {
   return (
     <form
       onSubmit={form.handleSubmit((values) => create.mutate(values))}
-      className="flex flex-col gap-5 rounded-[--radius-lg] border border-border-default p-4"
+      className="flex flex-col gap-5 rounded-(--radius-lg) border border-border-default p-4"
       noValidate
     >
       <TextField
@@ -245,7 +245,7 @@ function AddAddressForm({ onDone }: { onDone: () => void }): React.JSX.Element {
         />
       </div>
 
-      <fieldset className="flex flex-col gap-3 rounded-[--radius-lg] border border-border-default p-4">
+      <fieldset className="flex flex-col gap-3 rounded-(--radius-lg) border border-border-default p-4">
         <legend className="px-1 text-sm font-medium text-content-primary">Shop location</legend>
         <p className="text-sm text-content-secondary">
           This decides which distributors can deliver to you Same-Day. Stand at the shop and tap the

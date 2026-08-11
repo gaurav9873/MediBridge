@@ -18,7 +18,7 @@ import { cn } from '../lib/cn'
  */
 const buttonVariants = cva(
   cn(
-    'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[--radius-md]',
+    'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-(--radius-md)',
     'font-medium transition-colors select-none',
     'disabled:pointer-events-none disabled:opacity-50',
     '[&_svg]:size-5 [&_svg]:shrink-0',
@@ -42,10 +42,10 @@ const buttonVariants = cva(
       },
       size: {
         // 44px — the floor for anything tappable.
-        md: 'min-h-[--size-touch] px-4 text-base',
+        md: 'min-h-(--size-touch) px-4 text-base',
         // 48px — primary actions, especially the sticky mobile CTA.
-        lg: 'min-h-[--size-touch-lg] px-6 text-base',
-        icon: 'min-h-[--size-touch] w-[--size-touch] p-0',
+        lg: 'min-h-(--size-touch-lg) px-6 text-base',
+        icon: 'min-h-(--size-touch) w-(--size-touch) p-0',
       },
       fullWidth: {
         true: 'w-full',

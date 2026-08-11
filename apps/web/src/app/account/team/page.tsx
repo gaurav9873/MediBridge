@@ -186,7 +186,7 @@ export default function TeamPage(): React.JSX.Element {
                   </label>
                   <select
                     id="employee-role"
-                    className="min-h-[--size-touch] rounded-[--radius-md] border border-border-default bg-surface-raised px-3 text-base text-content-primary"
+                    className="min-h-(--size-touch) rounded-(--radius-md) border border-border-default bg-surface-raised px-3 text-base text-content-primary"
                     {...form.register('roleKey')}
                   >
                     {ROLES.map((role) => (
@@ -225,7 +225,7 @@ export default function TeamPage(): React.JSX.Element {
                 {(employees.data ?? []).map((employee) => (
                   <div
                     key={employee.id}
-                    className="flex flex-col gap-3 rounded-[--radius-lg] border border-border-default p-3 sm:flex-row sm:items-center sm:justify-between"
+                    className="flex flex-col gap-3 rounded-(--radius-lg) border border-border-default p-3 sm:flex-row sm:items-center sm:justify-between"
                   >
                     <div className="flex flex-col gap-0.5">
                       <span className="text-sm font-medium text-content-primary">
@@ -246,7 +246,7 @@ export default function TeamPage(): React.JSX.Element {
                           them is the rare one. */}
                       <select
                         aria-label={`Role for ${employee.fullName}`}
-                        className="min-h-[--size-touch] rounded-[--radius-md] border border-border-default bg-surface-raised px-2 text-sm text-content-primary"
+                        className="min-h-(--size-touch) rounded-(--radius-md) border border-border-default bg-surface-raised px-2 text-sm text-content-primary"
                         value={roles.data?.find((r) => r.key === employee.roleKey)?.id ?? ''}
                         onChange={(event) =>
                           assign.mutate({ userId: employee.id, roleId: event.target.value })

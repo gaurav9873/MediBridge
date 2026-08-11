@@ -54,7 +54,7 @@ export default function AdminLoginPage(): React.JSX.Element {
     <main className="flex min-h-dvh flex-col items-center justify-center bg-surface-sunken px-4 py-10">
       <div className="w-full max-w-md">
         <div className="mb-6 flex flex-col items-center gap-3 text-center">
-          <span className="flex size-14 items-center justify-center rounded-[--radius-xl] bg-brand-600 text-white">
+          <span className="flex size-14 items-center justify-center rounded-(--radius-xl) bg-brand-600 text-white">
             <ShieldCheck className="size-7" aria-hidden />
           </span>
           <div className="flex flex-col gap-1">

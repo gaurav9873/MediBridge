@@ -114,7 +114,7 @@ export function WarehouseList(): React.JSX.Element {
             {(warehouses.data ?? []).map((warehouse) => (
               <div
                 key={warehouse.id}
-                className="flex flex-col gap-3 rounded-[--radius-lg] border border-border-default p-3 sm:flex-row sm:items-start sm:justify-between"
+                className="flex flex-col gap-3 rounded-(--radius-lg) border border-border-default p-3 sm:flex-row sm:items-start sm:justify-between"
               >
                 <div className="flex flex-col gap-1">
                   <span className="text-sm font-medium text-content-primary">
@@ -238,7 +238,7 @@ function AddWarehouseForm({ onDone }: { onDone: () => void }): React.JSX.Element
   return (
     <form
       onSubmit={form.handleSubmit((values) => create.mutate(values))}
-      className="flex flex-col gap-5 rounded-[--radius-lg] border border-border-default p-4"
+      className="flex flex-col gap-5 rounded-(--radius-lg) border border-border-default p-4"
       noValidate
     >
       <TextField
@@ -285,7 +285,7 @@ function AddWarehouseForm({ onDone }: { onDone: () => void }): React.JSX.Element
         />
       </div>
 
-      <fieldset className="flex flex-col gap-3 rounded-[--radius-lg] border border-border-default p-4">
+      <fieldset className="flex flex-col gap-3 rounded-(--radius-lg) border border-border-default p-4">
         <legend className="px-1 text-sm font-medium text-content-primary">
           Warehouse Location
         </legend>

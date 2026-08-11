@@ -64,7 +64,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }):
         {/* Keyboard users land here first and can jump past the navigation. */}
         <a
           href="#main-content"
-          className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:rounded-[--radius-md] focus:bg-brand-600 focus:px-4 focus:py-2 focus:text-white"
+          className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:rounded-(--radius-md) focus:bg-brand-600 focus:px-4 focus:py-2 focus:text-white"
         >
           Skip to main content
         </a>

@@ -49,9 +49,9 @@ export function ConfirmDialog({
         <Dialog.Content
           className={cn(
             'fixed z-50 flex flex-col gap-4 bg-surface p-5 shadow-overlay',
-            'pb-safe inset-x-0 bottom-0 rounded-t-[--radius-xl]',
+            'pb-safe inset-x-0 bottom-0 rounded-t-(--radius-xl)',
             'sm:inset-auto sm:top-1/2 sm:left-1/2 sm:w-[26rem] sm:-translate-x-1/2 sm:-translate-y-1/2',
-            'sm:rounded-[--radius-xl] sm:pb-5',
+            'sm:rounded-(--radius-xl) sm:pb-5',
           )}
         >
           <div className="flex flex-col gap-2">

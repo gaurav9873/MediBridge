@@ -6,6 +6,7 @@ import {
   BarChart3,
   FileCheck2,
   Home,
+  Inbox,
   LogOut,
   Package,
   Pill,
@@ -42,6 +43,14 @@ const adminNav: readonly NavItem[] = [
   { href: '/admin/licences', label: 'Licences', icon: <FileCheck2 /> },
   { href: '/admin/imports', label: 'Bulk Imports', icon: <Upload /> },
   { href: '/admin/medicines', label: copy.common.nav.medicines, icon: <Pill /> },
+  {
+    href: '/admin/medicines/requests',
+    label: copy.admin.medicines.requestQueue.title,
+    icon: <Inbox />,
+    // The bottom bar fits five; this one is reachable from the medicines
+    // screen's own toolbar on mobile.
+    mobile: false,
+  },
   { href: '/admin/users', label: copy.common.nav.users, icon: <Users /> },
   { href: '/admin/orders', label: copy.common.nav.orders, icon: <Package /> },
   { href: '/admin/reports', label: copy.common.nav.reports, icon: <BarChart3 />, mobile: false },
@@ -85,7 +94,7 @@ export default function AdminDashboardLayout({
       onNavigate={(href) => router.push(href)}
       sidebarHeader={
         <div className="flex items-center gap-2.5">
-          <span className="flex size-9 shrink-0 items-center justify-center rounded-[--radius-md] bg-brand-600 text-white">
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-(--radius-md) bg-brand-600 text-white">
             <ShieldCheck className="size-5" aria-hidden />
           </span>
           <div className="flex min-w-0 flex-col">

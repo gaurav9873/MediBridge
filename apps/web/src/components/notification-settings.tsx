@@ -62,7 +62,7 @@ export function NotificationSettings(): React.JSX.Element {
             {(settings.data ?? []).map((setting) => (
               <div
                 key={setting.event}
-                className="flex flex-col gap-2 rounded-[--radius-lg] border border-border-default p-3 sm:flex-row sm:items-center sm:justify-between"
+                className="flex flex-col gap-2 rounded-(--radius-lg) border border-border-default p-3 sm:flex-row sm:items-center sm:justify-between"
               >
                 <div className="flex flex-col gap-0.5">
                   <span className="text-sm font-medium text-content-primary">{setting.label}</span>

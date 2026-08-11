@@ -63,7 +63,7 @@ export function DataView<T>({
     return (
       <div
         role="alert"
-        className="flex flex-col items-center gap-3 rounded-[--radius-lg] border border-danger-100 bg-danger-50 px-6 py-10 text-center"
+        className="flex flex-col items-center gap-3 rounded-(--radius-lg) border border-danger-100 bg-danger-50 px-6 py-10 text-center"
       >
         <AlertTriangle className="size-8 text-danger-600" aria-hidden />
         <h3 className="text-lg font-semibold text-danger-900">

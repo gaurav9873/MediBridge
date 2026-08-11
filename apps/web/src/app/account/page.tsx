@@ -2,7 +2,7 @@
 
 import { copy } from '@medibridge/copy'
 import { Alert, Button, Card, CardBody, CardHeader, PageShell, Skeleton } from '@medibridge/ui'
-import { Building2, LogOut, ShieldCheck, UserCog, Users } from 'lucide-react'
+import { Building2, FlaskConical, LogOut, ShieldCheck, UserCog, Users } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import * as React from 'react'
 import { AccountSessions } from '@/components/account-sessions'
@@ -135,6 +135,15 @@ export default function AccountPage(): React.JSX.Element {
                 onClick={() => router.push('/account/roles')}
               >
                 Roles and permissions
+              </Button>
+              {/* The catalogue is admin-owned, so "it is missing" needs a route
+                  out of this account rather than a dead end in search. */}
+              <Button
+                variant="secondary"
+                icon={<FlaskConical />}
+                onClick={() => router.push('/account/medicine-requests')}
+              >
+                {copy.admin.medicines.requests.mine.page.title}
               </Button>
             </div>
           </CardBody>

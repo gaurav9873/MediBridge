@@ -98,7 +98,7 @@ function StepIndicator({ step }: { step: OnboardingStatus['step'] }): React.JSX.
           <li
             key={key}
             aria-current={current ? 'step' : undefined}
-            className={`flex-1 rounded-[--radius-md] border px-3 py-2 text-sm ${
+            className={`flex-1 rounded-(--radius-md) border px-3 py-2 text-sm ${
               done
                 ? 'border-success-600 bg-success-50 text-success-900 dark:bg-success-950 dark:text-success-100'
                 : current
@@ -269,7 +269,7 @@ function BusinessStep(): React.JSX.Element {
             />
           </div>
 
-          <fieldset className="flex flex-col gap-3 rounded-[--radius-lg] border border-border-default p-4">
+          <fieldset className="flex flex-col gap-3 rounded-(--radius-lg) border border-border-default p-4">
             <legend className="px-1 text-sm font-medium text-content-primary">
               {c.location.label}
             </legend>

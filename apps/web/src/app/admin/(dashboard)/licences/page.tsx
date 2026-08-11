@@ -153,7 +153,7 @@ export default function LicencesPage(): React.JSX.Element {
               {(pending.data ?? []).map((document) => (
                 <div
                   key={document.id}
-                  className="flex flex-col gap-3 rounded-[--radius-lg] border border-border-default p-3 lg:flex-row lg:items-center lg:justify-between"
+                  className="flex flex-col gap-3 rounded-(--radius-lg) border border-border-default p-3 lg:flex-row lg:items-center lg:justify-between"
                 >
                   <div className="flex flex-col gap-0.5">
                     <span className="text-sm font-medium text-content-primary">
@@ -228,7 +228,7 @@ export default function LicencesPage(): React.JSX.Element {
                 return (
                   <div
                     key={document.id}
-                    className="flex flex-col gap-2 rounded-[--radius-lg] border border-border-default p-3 sm:flex-row sm:items-center sm:justify-between"
+                    className="flex flex-col gap-2 rounded-(--radius-lg) border border-border-default p-3 sm:flex-row sm:items-center sm:justify-between"
                   >
                     <div className="flex flex-col gap-0.5">
                       <span className="text-sm font-medium text-content-primary">

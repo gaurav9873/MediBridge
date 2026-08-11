@@ -102,9 +102,9 @@ export function OnboardingTour({
     if (!element) return
 
     element.scrollIntoView({ behavior: 'smooth', block: 'center' })
-    element.classList.add('ring-2', 'ring-brand-500', 'ring-offset-2', 'rounded-[--radius-md]')
+    element.classList.add('ring-2', 'ring-brand-500', 'ring-offset-2', 'rounded-(--radius-md)')
     return () => {
-      element.classList.remove('ring-2', 'ring-brand-500', 'ring-offset-2', 'rounded-[--radius-md]')
+      element.classList.remove('ring-2', 'ring-brand-500', 'ring-offset-2', 'rounded-(--radius-md)')
     }
   }, [open, step])
 
@@ -124,8 +124,8 @@ export function OnboardingTour({
           className={cn(
             'fixed z-50 flex flex-col gap-4 bg-surface p-5 shadow-overlay',
             // Bottom sheet on mobile, centred card on desktop.
-            'inset-x-0 bottom-0 rounded-t-[--radius-xl]',
-            'sm:inset-auto sm:top-1/2 sm:left-1/2 sm:w-[26rem] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-[--radius-xl]',
+            'inset-x-0 bottom-0 rounded-t-(--radius-xl)',
+            'sm:inset-auto sm:top-1/2 sm:left-1/2 sm:w-[26rem] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-(--radius-xl)',
             'pb-safe sm:pb-5',
           )}
         >

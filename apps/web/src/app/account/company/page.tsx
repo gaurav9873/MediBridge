@@ -237,7 +237,7 @@ function TermsCard({ settings }: { settings: CompanySettings }): React.JSX.Eleme
                 return (
                   <label
                     key={value}
-                    className={`flex cursor-pointer flex-col gap-0.5 rounded-[--radius-lg] border p-3 ${
+                    className={`flex cursor-pointer flex-col gap-0.5 rounded-(--radius-lg) border p-3 ${
                       selected
                         ? 'border-brand-600 bg-brand-50 dark:bg-brand-950'
                         : 'border-border-default hover:border-border-strong'
@@ -405,7 +405,7 @@ function BrandingCard({ settings }: { settings: CompanySettings }): React.JSX.El
             </div>
             <span
               aria-hidden
-              className="mb-7 size-11 shrink-0 rounded-[--radius-md] border border-border-default"
+              className="mb-7 size-11 shrink-0 rounded-(--radius-md) border border-border-default"
               style={{ background: /^#[0-9a-fA-F]{6}$/.test(colour ?? '') ? colour : undefined }}
             />
           </div>

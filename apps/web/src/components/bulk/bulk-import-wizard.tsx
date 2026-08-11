@@ -165,7 +165,7 @@ export function BulkImportWizard({
     >
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-40 bg-black/50" />
-        <Dialog.Content className="fixed inset-x-0 bottom-0 z-50 flex max-h-[92vh] flex-col rounded-t-[--radius-xl] bg-surface shadow-overlay sm:inset-1/2 sm:bottom-auto sm:h-auto sm:w-[38rem] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-[--radius-xl]">
+        <Dialog.Content className="fixed inset-x-0 bottom-0 z-50 flex max-h-[92vh] flex-col rounded-t-(--radius-xl) bg-surface shadow-overlay sm:inset-1/2 sm:bottom-auto sm:h-auto sm:w-[38rem] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-(--radius-xl)">
           <div className="flex items-start justify-between gap-4 border-b border-border-default p-5">
             <div className="flex flex-col gap-1">
               <Dialog.Title className="text-xl font-semibold text-content-primary">
@@ -193,7 +193,7 @@ export function BulkImportWizard({
                   {IMPORT_TYPES.map((option) => (
                     <label
                       key={option.value}
-                      className={`flex cursor-pointer gap-3 rounded-[--radius-md] border p-3 ${
+                      className={`flex cursor-pointer gap-3 rounded-(--radius-md) border p-3 ${
                         type === option.value
                           ? 'border-brand-600 bg-brand-50'
                           : 'border-border-strong hover:bg-surface-hover'
@@ -238,7 +238,7 @@ export function BulkImportWizard({
             {step === 'upload' && (
               <div className="flex flex-col gap-4">
                 <label
-                  className={`flex cursor-pointer flex-col items-center gap-2 rounded-[--radius-lg] border-2 border-dashed p-8 text-center ${
+                  className={`flex cursor-pointer flex-col items-center gap-2 rounded-(--radius-lg) border-2 border-dashed p-8 text-center ${
                     file ? 'border-brand-600 bg-brand-50' : 'border-border-strong'
                   }`}
                 >
@@ -323,7 +323,7 @@ export function BulkImportWizard({
                     </p>
 
                     {preview?.issues && preview.issues.length > 0 && (
-                      <div className="flex flex-col gap-2 rounded-[--radius-md] border border-border-default bg-surface-sunken p-3">
+                      <div className="flex flex-col gap-2 rounded-(--radius-md) border border-border-default bg-surface-sunken p-3">
                         <h3 className="text-sm font-semibold text-content-primary">
                           First few problems
                         </h3>
@@ -449,7 +449,7 @@ function Summary({
         : 'border-danger-100 bg-danger-50 text-danger-900'
 
   return (
-    <div className={`flex flex-col gap-0.5 rounded-[--radius-md] border p-3 ${toneClass}`}>
+    <div className={`flex flex-col gap-0.5 rounded-(--radius-md) border p-3 ${toneClass}`}>
       <span className="text-2xl font-semibold tabular-nums">{value.toLocaleString('en-IN')}</span>
       <span className="text-sm">{label}</span>
     </div>

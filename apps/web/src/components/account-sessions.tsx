@@ -88,7 +88,7 @@ export function AccountSessions(): React.JSX.Element {
             {(sessions.data ?? []).map((session) => (
               <div
                 key={session.id}
-                className="flex flex-col gap-3 rounded-[--radius-lg] border border-border-default p-3 sm:flex-row sm:items-center sm:justify-between"
+                className="flex flex-col gap-3 rounded-(--radius-lg) border border-border-default p-3 sm:flex-row sm:items-center sm:justify-between"
               >
                 <div className="flex flex-col gap-0.5">
                   <span className="text-sm font-medium text-content-primary">

@@ -276,7 +276,7 @@ function RoleEditor({
                 value={name}
                 onChange={(event) => setName(event.target.value)}
                 placeholder="Night Shift Packer"
-                className="min-h-[--size-touch] rounded-[--radius-md] border border-border-default bg-surface-raised px-3 text-base text-content-primary"
+                className="min-h-(--size-touch) rounded-(--radius-md) border border-border-default bg-surface-raised px-3 text-base text-content-primary"
               />
               <p className="text-sm text-content-secondary">
                 Something that describes the job, not the person.
@@ -291,7 +291,7 @@ function RoleEditor({
                 {group.permissions.map((permission) => (
                   <label
                     key={permission.key}
-                    className="flex cursor-pointer items-center gap-2.5 rounded-[--radius-md] border border-border-default p-2.5"
+                    className="flex cursor-pointer items-center gap-2.5 rounded-(--radius-md) border border-border-default p-2.5"
                   >
                     <input
                       type="checkbox"

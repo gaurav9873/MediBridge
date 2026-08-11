@@ -151,7 +151,7 @@ export function DocumentUpload({
                 type="file"
                 accept="application/pdf,image/jpeg,image/png,image/webp"
                 onChange={(event) => setFileName(event.target.files?.[0]?.name)}
-                className="block w-full rounded-[--radius-md] border border-border-default p-2 text-sm file:mr-3 file:rounded-[--radius-sm] file:border-0 file:bg-brand-600 file:px-3 file:py-1.5 file:text-white"
+                className="block w-full rounded-(--radius-md) border border-border-default p-2 text-sm file:mr-3 file:rounded-(--radius-sm) file:border-0 file:bg-brand-600 file:px-3 file:py-1.5 file:text-white"
               />
               <p className="text-sm text-content-secondary">
                 {fieldErrors.file ?? field.helperText}

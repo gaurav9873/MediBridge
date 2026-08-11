@@ -88,6 +88,100 @@ export function medicineKey(medicine: {
 }
 
 /**
+ * A blank optional field is absent, not empty.
+ *
+ * `medicineKey` above treats a missing strength and an empty one as the same
+ * thing. The database's unique constraint on those four columns does not:
+ * Postgres compares `''` and `NULL` as different values, so a medicine saved
+ * with strength `''` sits happily beside the same medicine saved with strength
+ * `NULL`. Two rows for one medicine is the precise failure this catalogue
+ * exists to prevent, and an untouched input box is the easiest way to cause it.
+ *
+ * Anything turning typed text into a medicine goes through here: the add and
+ * edit forms, the bulk import handler, and any integration after them.
+ */
+export function blankAsAbsent(value: string | null | undefined): string | undefined {
+  const trimmed = value?.trim()
+  return trimmed ? trimmed : undefined
+}
+
+/** The optional text on a medicine. Blank in any of these means "not given". */
+export interface MedicineOptionalText {
+  strength?: string | null
+  packSize?: string | null
+  manufacturer?: string | null
+}
+
+/** Applies {@link blankAsAbsent} to every optional field of a medicine. */
+export function normaliseMedicineOptionals<T extends MedicineOptionalText>(input: T): T {
+  // The spread cannot be proven to still be T by the compiler, but every key
+  // it rewrites is declared optional on MedicineOptionalText, so it is.
+  return {
+    ...input,
+    strength: blankAsAbsent(input.strength),
+    packSize: blankAsAbsent(input.packSize),
+    manufacturer: blankAsAbsent(input.manufacturer),
+  } as T
+}
+
+// ---------------------------------------------------------------------------
+// Comparison
+// ---------------------------------------------------------------------------
+
+/** Everything a person compares when deciding whether two rows are one medicine. */
+export const MEDICINE_COMPARISON_FIELDS = [
+  'name',
+  'brand',
+  'composition',
+  'form',
+  'strength',
+  'packSize',
+  'manufacturer',
+  'hsnCode',
+  'gstRate',
+  'schedule',
+  'isPrescriptionRequired',
+] as const
+
+export type MedicineComparisonField = (typeof MEDICINE_COMPARISON_FIELDS)[number]
+
+export interface ComparableMedicine extends MedicineOptionalText {
+  name: string
+  brand: string
+  composition: string
+  form: string
+  hsnCode: string
+  gstRate: number
+  schedule: string
+  isPrescriptionRequired: boolean
+}
+
+/**
+ * Which fields two medicines disagree on.
+ *
+ * This is what a merge screen highlights, and merging is the one action in the
+ * catalogue that cannot be undone — stock genuinely moves. Under-reporting a
+ * difference hides the reason not to merge, so the optional fields are
+ * compared through `blankAsAbsent`: a missing pack size and an empty one are
+ * the same absence, and flagging them as a difference would be noise that
+ * trains people to ignore the highlighting entirely.
+ */
+export function medicineDifferences(
+  left: ComparableMedicine,
+  right: ComparableMedicine,
+): MedicineComparisonField[] {
+  const optional = new Set<MedicineComparisonField>(['strength', 'packSize', 'manufacturer'])
+
+  return MEDICINE_COMPARISON_FIELDS.filter((field) => {
+    if (optional.has(field)) {
+      return blankAsAbsent(left[field] as string | null | undefined) !==
+        blankAsAbsent(right[field] as string | null | undefined)
+    }
+    return left[field] !== right[field]
+  })
+}
+
+/**
  * How alike two medicines are, from 0 to 1.
  *
  * Used to surface *probable* duplicates — the ones an exact key misses because
