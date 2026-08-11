@@ -139,3 +139,32 @@ export const medicineSearchSchema = z.object({
   pageSize: z.coerce.number().int().min(1).max(50).default(20),
 })
 export type MedicineSearchInput = z.infer<typeof medicineSearchSchema>
+
+/** Browsing the catalogue: text, filters and paging in one place. */
+export const medicineListSchema = z.object({
+  search: z.string().trim().max(120).optional(),
+  form: z.string().trim().optional(),
+  schedule: z.string().trim().optional(),
+  status: z.enum(['active', 'archived', 'all']).default('active'),
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(25),
+})
+export type MedicineListQuery = z.infer<typeof medicineListSchema>
+
+/** Merging a duplicate into the row that should survive. */
+export const mergeMedicineSchema = z.object({
+  keepId: z.uuid(),
+  mergeId: z.uuid(),
+})
+export type MergeMedicineInput = z.infer<typeof mergeMedicineSchema>
+
+/** Asking for a medicine that is missing from the catalogue. */
+export const medicineRequestSchema = z.object({
+  name: z.string().trim().min(2, v.requiredNamed('medicine name')).max(200, v.text.tooLong(200)),
+  brand: z.string().trim().min(1, v.requiredNamed('brand')).max(120, v.text.tooLong(120)),
+  composition: z.string().trim().max(300, v.text.tooLong(300)).optional(),
+  form: z.string().trim().optional(),
+  strength: z.string().trim().max(60, v.text.tooLong(60)).optional(),
+  notes: z.string().trim().max(1000, v.text.tooLong(1000)).optional(),
+})
+export type MedicineRequestInput = z.infer<typeof medicineRequestSchema>

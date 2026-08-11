@@ -8,6 +8,7 @@ import { AdminModule } from './admin/admin.module'
 import { AuthModule } from './auth/auth.module'
 import { BulkModule } from './bulk/bulk.module'
 import { CompanyModule } from './company/company.module'
+import { MedicineModule } from './medicine/medicine.module'
 import { ProfileModule } from './profile/profile.module'
 import { OnboardingModule } from './onboarding/onboarding.module'
 import { PrismaModule } from './common/prisma/prisma.module'
@@ -62,6 +63,7 @@ const env = loadEnv()
     OnboardingModule,
     CompanyModule,
     ProfileModule,
+    MedicineModule,
     HealthModule,
     AdminModule,
     SearchModule,
