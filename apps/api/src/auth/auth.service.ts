@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common'
 import { ApiErrorCode, type SessionUser, type SignInInput, UserRole } from '@medibridge/types'
 import { AuthMethod } from '@medibridge/types'
+import { PRIMARY_CUSTOMER_PROFILE, primaryProfile } from '../common/customer-profile'
 import { AppException } from '../common/errors/app-exception'
 import { CompanyLinkService } from '../tenancy/company-link.service'
 import { TenantPrismaService } from '../tenancy/tenant-prisma.service'
@@ -58,7 +59,7 @@ export class AuthService {
     const user = await this.db.runPreTenant((tx) =>
       tx.user.findFirst({
         where: { id: identity.userId, deletedAt: null },
-        include: { customerProfile: true, companyRef: true },
+        include: { customerProfiles: PRIMARY_CUSTOMER_PROFILE, companyRef: true },
       }),
     )
     if (!user) throw new AppException(ApiErrorCode.INVALID_CREDENTIALS)
@@ -125,7 +126,7 @@ export class AuthService {
     const user = await this.db.runPreTenant((tx) =>
       tx.user.findFirst({
         where: { id: userId, deletedAt: null },
-        include: { customerProfile: true, companyRef: true },
+        include: { customerProfiles: PRIMARY_CUSTOMER_PROFILE, companyRef: true },
       }),
     )
     if (!user) return null
@@ -153,12 +154,16 @@ export class AuthService {
     email: string
     role: string
     accountStatus: string
-    customerProfile: { businessName: string; licenseExpiresOn: Date | null } | null
+    customerProfiles: Array<{ businessName: string; licenseExpiresOn: Date | null }>
     companyRef: { name: string; licenseExpiresOn: Date | null } | null
   }): SessionUser {
-    const businessName = user.customerProfile?.businessName ?? user.companyRef?.name ?? null
+    // A buyer may trade with several distributors; the session carries one
+    // trading name, chosen the same way everywhere. See customer-profile.ts.
+    const profile = primaryProfile(user.customerProfiles)
+
+    const businessName = profile?.businessName ?? user.companyRef?.name ?? null
     const licenseExpiresOn =
-      user.customerProfile?.licenseExpiresOn ?? user.companyRef?.licenseExpiresOn ?? null
+      profile?.licenseExpiresOn ?? user.companyRef?.licenseExpiresOn ?? null
 
     const licenceValid = licenseExpiresOn !== null && licenseExpiresOn.getTime() > Date.now()
 

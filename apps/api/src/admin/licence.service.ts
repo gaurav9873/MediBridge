@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common'
 import { ApiErrorCode } from '@medibridge/types'
+import { PRIMARY_CUSTOMER_PROFILE, primaryProfile } from '../common/customer-profile'
 import { AppException } from '../common/errors/app-exception'
 import { TenantPrismaService } from '../tenancy/tenant-prisma.service'
 
@@ -50,7 +51,14 @@ export class LicenceService {
         where: { verificationStatus: 'PENDING' },
         orderBy: { createdAt: 'asc' },
         include: {
-          user: { select: { fullName: true, phone: true, customerProfile: true, companyRef: true } },
+          user: {
+            select: {
+              fullName: true,
+              phone: true,
+              customerProfiles: PRIMARY_CUSTOMER_PROFILE,
+              companyRef: true,
+            },
+          },
         },
       }),
     )
@@ -76,7 +84,14 @@ export class LicenceService {
         },
         orderBy: { expiresOn: 'asc' },
         include: {
-          user: { select: { fullName: true, phone: true, customerProfile: true, companyRef: true } },
+          user: {
+            select: {
+              fullName: true,
+              phone: true,
+              customerProfiles: PRIMARY_CUSTOMER_PROFILE,
+              companyRef: true,
+            },
+          },
         },
       }),
     )
@@ -97,7 +112,7 @@ export class LicenceService {
     return this.db.runAsPlatform('approve document', async (tx) => {
       const document = await tx.document.findUnique({
         where: { id: documentId },
-        include: { user: { select: { id: true, companyId: true, customerProfile: true } } },
+        include: { user: { select: { id: true, companyId: true, customerProfiles: true } } },
       })
       if (!document) throw new AppException(ApiErrorCode.NOT_FOUND)
 
@@ -129,8 +144,11 @@ export class LicenceService {
 
       if (document.type === 'DRUG_LICENSE') {
         const licence = { drugLicenseNumber: document.number, licenseExpiresOn: document.expiresOn }
-        if (document.user.customerProfile) {
-          await tx.customer.update({ where: { userId: document.user.id }, data: licence })
+        // A drug licence belongs to the shop, not to one trading relationship,
+        // so it lands on every distributor this buyer deals with — updateMany
+        // rather than update, since userId alone no longer identifies one row.
+        if (document.user.customerProfiles.length > 0) {
+          await tx.customer.updateMany({ where: { userId: document.user.id }, data: licence })
         } else if (document.user.companyId) {
           await tx.company.update({ where: { id: document.user.companyId }, data: licence })
         }
@@ -245,7 +263,7 @@ function toReview(document: {
   user: {
     fullName: string
     phone: string
-    customerProfile: { businessName: string } | null
+    customerProfiles: Array<{ businessName: string }>
     companyRef: { name: string } | null
   }
 }): DocumentReview {
@@ -253,7 +271,10 @@ function toReview(document: {
     id: document.id,
     userId: document.userId,
     applicantName: document.user.fullName,
-    businessName: document.user.customerProfile?.businessName ?? document.user.companyRef?.name ?? null,
+    businessName:
+      primaryProfile(document.user.customerProfiles)?.businessName ??
+      document.user.companyRef?.name ??
+      null,
     phone: document.user.phone,
     type: document.type,
     number: document.number,

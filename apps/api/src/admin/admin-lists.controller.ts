@@ -3,6 +3,7 @@ import { ApiOperation, ApiTags } from '@nestjs/swagger'
 import { type Paginated, UserRole } from '@medibridge/types'
 import { z } from 'zod'
 import { Roles } from '../auth/auth.guard'
+import { PRIMARY_CUSTOMER_PROFILE, primaryProfile } from '../common/customer-profile'
 import { TenantPrismaService } from '../tenancy/tenant-prisma.service'
 
 /**
@@ -157,7 +158,7 @@ export class AdminListsController {
           skip: (query.page - 1) * query.pageSize,
           take: query.pageSize,
           include: {
-            customerProfile: true,
+            customerProfiles: PRIMARY_CUSTOMER_PROFILE,
             companyRef: true,
             addresses: { where: { deletedAt: null }, take: 1, orderBy: { isDefault: 'desc' } },
           },
@@ -170,17 +171,18 @@ export class AdminListsController {
       items: items.map((user) => {
         // Buyers trade under a Customer name; a seller's staff under the
         // selling company's own name.
+        const profile = primaryProfile(user.customerProfiles)
         return {
           id: user.id,
           fullName: user.fullName,
-          businessName: user.customerProfile?.businessName ?? user.companyRef?.name ?? null,
+          businessName: profile?.businessName ?? user.companyRef?.name ?? null,
           role: user.role,
           phone: user.phone,
           email: user.email,
           city: user.addresses[0]?.city ?? null,
           accountStatus: user.accountStatus,
           licenseExpiresOn:
-            (user.customerProfile?.licenseExpiresOn ?? user.companyRef?.licenseExpiresOn)
+            (profile?.licenseExpiresOn ?? user.companyRef?.licenseExpiresOn)
               ?.toISOString()
               .slice(0, 10) ?? null,
           createdAt: user.createdAt.toISOString(),
@@ -206,9 +208,11 @@ export class AdminListsController {
           skip: (query.page - 1) * query.pageSize,
           take: query.pageSize,
           include: {
-            retailer: {
-              select: { fullName: true, customerProfile: { select: { businessName: true } } },
-            },
+            retailer: { select: { fullName: true } },
+            // The order names the relationship it was placed under, so the
+            // trading name comes from there rather than being looked up from
+            // the buyer — which now has one per distributor.
+            customer: { select: { businessName: true } },
             // The seller is the company; the warehouse only says where from.
             warehouse: { select: { name: true, company: { select: { name: true } } } },
           },
@@ -221,7 +225,7 @@ export class AdminListsController {
       items: items.map((order) => ({
         id: order.id,
         orderNumber: order.orderNumber,
-        retailerName: order.retailer.customerProfile?.businessName ?? order.retailer.fullName,
+        retailerName: order.customer.businessName ?? order.retailer.fullName,
         distributorName: order.warehouse.company.name,
         status: order.status,
         deliveryMode: order.deliveryMode,

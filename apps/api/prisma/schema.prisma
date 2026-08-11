@@ -247,7 +247,9 @@ model User {
   updatedSettings    Setting[]
   initiatedRefunds   Refund[]
   bulkJobs           BulkJob[]
-  customerProfile    Customer?
+  /// One per distributor this buyer trades with. A list rather than a single
+  /// row since the same shop may hold relationships with several.
+  customerProfiles   Customer[]
   roleAssignments    UserRoleAssignment[]
   identities         UserIdentity[]
 
@@ -656,6 +658,12 @@ model Order {
   orderGroupId String  @db.Uuid
 
   retailerId  String @db.Uuid
+  /// The buyer's relationship with `companyId`, resolved when the order is
+  /// created rather than inferred afterwards. Once a shop can buy from several
+  /// distributors, "which customer is this?" has more than one answer unless
+  /// the order records the one it was placed under — and credit limits and
+  /// payment terms hang off that answer.
+  customerId  String @db.Uuid
   warehouseId String @db.Uuid
   addressId   String @db.Uuid
 
@@ -691,6 +699,7 @@ model Order {
 
   orderGroup      OrderGroup           @relation(fields: [orderGroupId], references: [id])
   retailer        User                 @relation("RetailerOrders", fields: [retailerId], references: [id])
+  customer        Customer             @relation(fields: [customerId], references: [id])
   warehouse       Warehouse            @relation("WarehouseOrders", fields: [warehouseId], references: [id])
   address         Address              @relation(fields: [addressId], references: [id])
   items           OrderItem[]
@@ -702,6 +711,7 @@ model Order {
   settlementItems SettlementItem[]
 
   @@index([retailerId, status, createdAt])
+  @@index([customerId, status, createdAt])
   @@index([warehouseId, status, createdAt])
   @@index([status, createdAt])
   @@index([orderGroupId])
@@ -1385,15 +1395,43 @@ model Warehouse {
 /// A buyer. Belongs to exactly one company — the portal they signed up on.
 /// In marketplace mode that company is the operator, and the customer may
 /// order from any linked seller.
+/// Where a buyer stands with one distributor.
+///
+/// Kept per relationship rather than on the buyer, because the same shop can
+/// be in good standing with one distributor and suspended by another. A
+/// suspended relationship is not a closed account — the row survives so the
+/// order history it owns still resolves.
+enum CustomerStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+  REJECTED
+}
+
+/// One buyer's trading relationship with one company.
+///
+/// This IS the join between a User and a Company — there is deliberately no
+/// `Customer.parentId` and no separate CustomerCompany table. A shop buying
+/// antibiotics from one stockist and surgical supplies from another gets one
+/// row here per stockist, each with its own credit limit, payment terms and
+/// standing.
+///
+/// `@@unique([companyId, userId])` rather than a unique `userId`: one buyer,
+/// many distributors, but never two relationships with the same distributor.
 model Customer {
   id           String  @id @default(uuid()) @db.Uuid
   companyId    String  @db.Uuid
-  userId       String  @unique @db.Uuid
+  userId       String  @db.Uuid
   businessName String  @db.VarChar(160)
   gstNumber    String? @db.VarChar(15)
 
   drugLicenseNumber String?   @db.VarChar(60)
   licenseExpiresOn  DateTime? @db.Date
+
+  /// Where this buyer stands with THIS distributor. See CustomerStatus.
+  status     CustomerStatus @default(PENDING)
+  /// When the distributor accepted the relationship. Null until they do.
+  approvedAt DateTime?
 
   /// CREDIT terms only. Null means no credit allowed.
   creditLimitPaise Int?
@@ -1406,9 +1444,12 @@ model Customer {
 
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orders  Order[]
 
+  @@unique([companyId, userId])
   @@unique([companyId, gstNumber])
   @@index([companyId, deletedAt])
+  @@index([userId, status])
   @@map("customers")
 }
 

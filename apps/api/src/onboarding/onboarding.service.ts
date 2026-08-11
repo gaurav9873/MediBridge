@@ -48,8 +48,12 @@ export class OnboardingService {
   async status(user: SessionUser): Promise<OnboardingStatus> {
     const [customer, company, documents] = await this.db.runPreTenant((tx) =>
       Promise.all([
-        tx.customer.findUnique({
-          where: { userId: user.id },
+        // A buyer may hold a relationship with more than one distributor, so
+        // this is no longer a unique lookup. Onboarding only asks "have they
+        // told us who they are yet?", which any of them answers.
+        tx.customer.findFirst({
+          where: { userId: user.id, deletedAt: null },
+          orderBy: { approvedAt: { sort: 'desc', nulls: 'last' } },
           select: { businessName: true, gstNumber: true },
         }),
         user.companyId
@@ -148,8 +152,11 @@ export class OnboardingService {
         },
       })
 
+      // Keyed on the pair: this buyer's relationship with THIS distributor.
+      // Onboarding again for a second distributor creates a second row rather
+      // than overwriting the first.
       await tx.customer.upsert({
-        where: { userId: user.id },
+        where: { companyId_userId: { companyId, userId: user.id } },
         create: {
           companyId,
           userId: user.id,

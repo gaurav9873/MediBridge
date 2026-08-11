@@ -523,6 +523,9 @@ async function main(): Promise<void> {
       gstNumber: '27AADCS9876P1ZQ',
       drugLicenseNumber: 'MH-PUN-20-556677',
       licenseExpiresOn: monthsFromNow(14),
+      // Licence checked and accepted, so the trading relationship is live.
+      status: 'ACTIVE',
+      approvedAt: new Date(),
     },
   })
   console.log('  Retailer     rajesh@sharmamedical.in / 9000000020  (Pune Camp)')
@@ -557,6 +560,8 @@ async function main(): Promise<void> {
       gstNumber: '27AAECK5432R1ZM',
       drugLicenseNumber: 'MH-MUM-20-334455',
       licenseExpiresOn: monthsFromNow(8),
+      status: 'ACTIVE',
+      approvedAt: new Date(),
     },
   })
   console.log('  Retailer     sunita@kumarpharmacy.in / 9000000021  (Mumbai Andheri)')
@@ -617,6 +622,9 @@ async function main(): Promise<void> {
       userId: pending.userId,
       businessName: 'New Life Chemists',
       gstNumber: '27AAFCN1122L1ZP',
+      // Documents still with the reviewer — the relationship is not live yet.
+      // This is what the approvals queue is for.
+      status: 'PENDING',
     },
   })
   console.log('  Retailer     imran@newlifechemists.in / 9000000022  (awaiting approval)')

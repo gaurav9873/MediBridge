@@ -181,6 +181,29 @@ avoids per-distributor gateway onboarding in the MVP.
 MediBridge tracks status and verifies handover with a 4-digit code the retailer reads
 out. No first-party logistics, no rider app, no route optimisation in the MVP.
 
+### A buyer trades with many distributors
+
+`Customer` is the relationship between a User and a Company — one row per distributor a
+shop buys from, carrying that distributor's own credit limit, payment terms and standing.
+There is deliberately no `Customer.parentId` and no separate `CustomerCompany` table:
+`Customer` already *is* the join, so it only needed its unique key widening from `userId`
+to `(companyId, userId)`.
+
+Standing lives on the relationship rather than on the user, because a shop suspended by
+one distributor is not suspended by the others. Orders record `customerId` alongside
+`companyId` so the relationship an order was placed under is stored, not inferred — with
+several distributors in play, "which customer is this?" otherwise has more than one
+answer, and credit limits and payment terms hang off it.
+
+Done while `orders` was still empty, which is the only reason `customerId` could be added
+as NOT NULL without a backfill. The MVP flow stays one active relationship per shop.
+
+**Open:** in marketplace mode a buyer is currently a `Customer` of the marketplace, while
+orders belong to the selling company — so `order.companyId` and `order.customer.companyId`
+can differ. Phase 3.7 has to settle whether a marketplace buyer gets a `Customer` row per
+seller, or whether that invariant simply does not hold in marketplace mode. The database
+does not enforce it either way today.
+
 ---
 
 ## Open questions for later phases

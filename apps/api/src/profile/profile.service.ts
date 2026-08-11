@@ -6,6 +6,7 @@ import {
   NOTIFIABLE_EVENTS,
   type SessionUser,
 } from '@medibridge/types'
+import { PRIMARY_CUSTOMER_PROFILE, primaryProfile } from '../common/customer-profile'
 import { AppException } from '../common/errors/app-exception'
 import { ChallengeService } from '../auth/challenge.service'
 import { TenantPrismaService } from '../tenancy/tenant-prisma.service'
@@ -82,7 +83,7 @@ export class ProfileService {
           emailVerifiedAt: true,
           lastLoginAt: true,
           createdAt: true,
-          customerProfile: { select: { businessName: true } },
+          customerProfiles: { ...PRIMARY_CUSTOMER_PROFILE, select: { businessName: true } },
           companyRef: { select: { name: true } },
           roleAssignments: { select: { role: { select: { name: true } } }, take: 1 },
         },
@@ -97,7 +98,8 @@ export class ProfileService {
       email: record.email,
       role: record.role,
       accountStatus: record.accountStatus,
-      businessName: record.customerProfile?.businessName ?? record.companyRef?.name ?? null,
+      businessName:
+        primaryProfile(record.customerProfiles)?.businessName ?? record.companyRef?.name ?? null,
       roleName: record.roleAssignments[0]?.role.name ?? null,
       phoneVerified: record.phoneVerifiedAt != null,
       emailVerified: record.emailVerifiedAt != null,

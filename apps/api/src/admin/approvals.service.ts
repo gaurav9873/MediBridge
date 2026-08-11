@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common'
 import { ApiErrorCode, type PendingApplication } from '@medibridge/types'
+import { PRIMARY_CUSTOMER_PROFILE, primaryProfile } from '../common/customer-profile'
 import { AppException } from '../common/errors/app-exception'
 import { TenantPrismaService } from '../tenancy/tenant-prisma.service'
 
@@ -29,7 +30,7 @@ export class ApprovalsService {
           deletedAt: null,
         },
         include: {
-          customerProfile: true,
+          customerProfiles: PRIMARY_CUSTOMER_PROFILE,
           companyRef: true,
           documents: { orderBy: { type: 'asc' } },
           addresses: { where: { deletedAt: null }, orderBy: { isDefault: 'desc' }, take: 1 },
@@ -42,8 +43,9 @@ export class ApprovalsService {
     return users.map((user) => {
       // A buyer applies as a Customer; a seller's staff apply on behalf of the
       // selling Company. Both carry a trading name and a GST number.
-      const profile = user.customerProfile ?? user.companyRef
-      const businessName = user.customerProfile?.businessName ?? user.companyRef?.name ?? null
+      const customer = primaryProfile(user.customerProfiles)
+      const profile = customer ?? user.companyRef
+      const businessName = customer?.businessName ?? user.companyRef?.name ?? null
       const address = user.addresses[0]
 
       return {
@@ -84,7 +86,7 @@ export class ApprovalsService {
     return this.db.runAsPlatform('approve application', async (tx) => {
       const user = await tx.user.findFirst({
         where: { id: userId, deletedAt: null },
-        include: { documents: true, customerProfile: true, companyRef: true },
+        include: { documents: true, customerProfiles: true, companyRef: true },
       })
 
       if (!user) throw new AppException(ApiErrorCode.NOT_FOUND)
@@ -136,8 +138,10 @@ export class ApprovalsService {
           licenseExpiresOn: licence.expiresOn,
         }
 
-        if (user.customerProfile) {
-          await tx.customer.update({ where: { userId }, data: licenceData })
+        // The licence is the shop's, so it reaches every distributor they
+        // trade with. userId no longer identifies a single relationship.
+        if (user.customerProfiles.length > 0) {
+          await tx.customer.updateMany({ where: { userId }, data: licenceData })
         } else if (user.companyId) {
           await tx.company.update({ where: { id: user.companyId }, data: licenceData })
         }
