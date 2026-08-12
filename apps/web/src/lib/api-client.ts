@@ -40,7 +40,86 @@ interface RequestOptions extends Omit<RequestInit, 'body'> {
   auth?: boolean
 }
 
+/**
+ * Endpoints that must never trigger a refresh-and-retry.
+ *
+ * Refreshing in response to a failed refresh is an infinite loop, and retrying
+ * a sign-in adds nothing.
+ */
+const NO_RETRY = ['/auth/refresh', '/auth/sign-in', '/auth/admin/sign-in', '/auth/sign-out']
+
+/**
+ * One refresh at a time, shared by every caller.
+ *
+ * A screen typically fires several requests at once. Without this, all of them
+ * would notice the expiry together and fire their own refresh — and because
+ * refresh tokens rotate with replay detection, the second one to land would
+ * look like a stolen token and kill the session outright. So the first caller
+ * refreshes and the rest wait on the same promise.
+ */
+let refreshInFlight: Promise<boolean> | null = null
+
+function refreshSession(): Promise<boolean> {
+  refreshInFlight ??= (async () => {
+    try {
+      const response = await fetch(`${BASE_URL}/auth/refresh`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+      })
+      return response.ok
+    } catch {
+      return false
+    } finally {
+      // Cleared on the next tick so callers racing this one still join it.
+      setTimeout(() => {
+        refreshInFlight = null
+      }, 0)
+    }
+  })()
+  return refreshInFlight
+}
+
+/**
+ * Ends the session cleanly.
+ *
+ * A full navigation rather than a router push: it guarantees no stale React
+ * Query cache, no half-rendered shell and no in-memory state from the signed-in
+ * user survives into the login page. Being logged out should look like being
+ * logged out.
+ */
+function forceSignOut(): void {
+  if (typeof window === 'undefined') return
+  const { pathname } = window.location
+  if (pathname.endsWith('/login')) return
+
+  // Staff and buyers have different front doors; send them to their own.
+  const loginPath = pathname.startsWith('/admin') ? '/admin/login' : '/login'
+  window.location.replace(`${loginPath}?expired=1`)
+}
+
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  return attempt<T>(path, options, true)
+}
+
+/**
+ * One request, with a single transparent recovery from an expired session.
+ *
+ * The access cookie lives 15 minutes and the browser DELETES it when it
+ * lapses, so the next request arrives with no cookie at all and the server
+ * answers UNAUTHENTICATED rather than SESSION_EXPIRED. Both mean the same
+ * thing here — the access token is gone — and both are recoverable from the
+ * refresh cookie, which lasts 30 days.
+ *
+ * Handling only SESSION_EXPIRED, as this used to, meant the common case never
+ * recovered: people were signed out after 15 idle minutes while a perfectly
+ * valid refresh cookie sat unused.
+ */
+async function attempt<T>(
+  path: string,
+  options: RequestOptions,
+  mayRetry: boolean,
+): Promise<T> {
   const { body, auth = true, headers, ...rest } = options
 
   // A file upload is FormData, and the browser must set Content-Type itself so
@@ -82,8 +161,17 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
 
   if (!response.ok || payload.success === false) {
     const error = payload.success === false ? payload.error : undefined
+    const code = error?.code ?? 'INTERNAL_ERROR'
+
+    const sessionGone = code === 'SESSION_EXPIRED' || code === 'UNAUTHENTICATED'
+    if (sessionGone && auth && mayRetry && !NO_RETRY.some((route) => path.startsWith(route))) {
+      if (await refreshSession()) return attempt<T>(path, options, false)
+      // The refresh cookie is gone or was rejected. This is a real sign-out.
+      forceSignOut()
+    }
+
     throw new ApiClientError({
-      code: error?.code ?? 'INTERNAL_ERROR',
+      code,
       // Prefer the server's message (already friendly), fall back to the local
       // lookup so an unknown code still produces a readable sentence.
       message: error?.message ?? friendlyMessage(error?.code),

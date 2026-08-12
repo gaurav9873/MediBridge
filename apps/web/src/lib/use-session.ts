@@ -25,17 +25,19 @@ export function useSession(): {
         const result = await api.get<{ user: SessionUser }>('/auth/me')
         return result.user
       } catch (error) {
-        // An expired access token is normal — try the refresh cookie once
-        // before deciding the user is signed out.
-        if (error instanceof ApiClientError && error.code === 'SESSION_EXPIRED') {
-          try {
-            const refreshed = await api.post<{ user: SessionUser }>('/auth/refresh')
-            return refreshed.user
-          } catch {
-            return null
-          }
+        /*
+         * The api client already tried the refresh cookie and, if that failed,
+         * has started a clean sign-out. Reaching here means the session is
+         * genuinely over, so there is nothing left to attempt — this used to
+         * run its own refresh, which raced the client's and could trip the
+         * refresh-token replay detection.
+         */
+        if (
+          error instanceof ApiClientError &&
+          (error.code === 'UNAUTHENTICATED' || error.code === 'SESSION_EXPIRED')
+        ) {
+          return null
         }
-        if (error instanceof ApiClientError && error.code === 'UNAUTHENTICATED') return null
         throw error
       }
     },

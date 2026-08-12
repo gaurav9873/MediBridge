@@ -12,6 +12,7 @@ import { useRouter } from 'next/navigation'
 import * as React from 'react'
 import { useForm } from 'react-hook-form'
 import { ApiClientError, api, applyFieldErrors } from '@/lib/api-client'
+import { SignedOutNotice } from '@/components/signed-out-notice'
 
 /**
  * Admin sign-in.
@@ -64,6 +65,8 @@ export default function AdminLoginPage(): React.JSX.Element {
             <p className="text-base text-content-secondary">{c.page.subtitle}</p>
           </div>
         </div>
+
+        <SignedOutNotice />
 
         <Card>
           <CardBody>
