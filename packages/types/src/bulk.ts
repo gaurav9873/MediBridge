@@ -146,6 +146,16 @@ export interface BulkJobSummary {
   hasErrorFile: boolean
   hasResultFile: boolean
 
+  /**
+   * Whether this job can be removed from the history.
+   *
+   * True for anything the worker is not actively processing — finished,
+   * cancelled, paused, or parked waiting for a decision. Only PENDING,
+   * VALIDATING and IMPORTING are off limits, because deleting one of those
+   * leaves the worker writing progress to a row that no longer exists.
+   */
+  canRemove: boolean
+
   createdByName: string
   queuedAt: string
   validatedAt: string | null

@@ -249,7 +249,16 @@ export class BulkService {
   async remove(jobId: string, user: SessionUser): Promise<{ removed: true }> {
     const job = await this.requireJob(jobId, user)
 
-    if (!TERMINAL_BULK_STATUSES.includes(job.status as never)) {
+    /*
+     * Anything the worker is not actively processing can go — including a job
+     * parked at AWAITING_CONFIRMATION or PAUSED. Those are stale records
+     * cluttering somebody's list, and making them cancel first before they can
+     * remove is two steps to achieve one thing.
+     *
+     * PENDING, VALIDATING and IMPORTING are the real exclusions: deleting one
+     * of those leaves the worker writing progress to a row that has gone.
+     */
+    if (ACTIVE_BULK_STATUSES.includes(job.status as never)) {
       throw new AppException(ApiErrorCode.INVALID_STATUS_TRANSITION, {
         fields: [
           {
@@ -445,5 +454,6 @@ function toSummary(job: {
     canPause: ACTIVE_BULK_STATUSES.includes(status),
     canResume: status === BulkJobStatus.PAUSED || status === BulkJobStatus.FAILED,
     canCancel: !TERMINAL_BULK_STATUSES.includes(status),
+    canRemove: !ACTIVE_BULK_STATUSES.includes(status),
   }
 }

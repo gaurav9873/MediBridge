@@ -347,9 +347,7 @@ function JobActions({
           </a>
         </Button>
       )}
-      {/* Only a finished import can be removed — a running one would leave the
-          worker writing progress to a row that no longer exists. */}
-      {!job.canCancel && (
+      {job.canRemove && (
         <Button
           variant="ghost"
           size="md"
