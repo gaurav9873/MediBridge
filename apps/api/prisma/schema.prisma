@@ -244,6 +244,7 @@ model User {
   medicineRequests   MedicineRequest[]        @relation("MedicineRequester")
   reviewedRequests   MedicineRequest[]        @relation("MedicineRequestReviewer")
   createdMedicines   Medicine[]               @relation("MedicineCreator")
+  stockTransfers     StockTransfer[]          @relation("StockTransferActor")
   updatedSettings    Setting[]
   initiatedRefunds   Refund[]
   bulkJobs           BulkJob[]
@@ -445,6 +446,7 @@ model Medicine {
   orderItems     OrderItem[]
   requests       MedicineRequest[]
   offers         MedicineOffer[]
+  stockTransfers StockTransfer[]
 
   @@unique([name, brand, strength, packSize])
   @@index([isActive, schedule])
@@ -1300,8 +1302,9 @@ model Company {
   deletedAt DateTime?
 
   plan          Plan?               @relation(fields: [planId], references: [id])
-  warehouses    Warehouse[]
-  customers     Customer[]
+  warehouses     Warehouse[]
+  customers      Customer[]
+  stockTransfers StockTransfer[]
   roles         Role[]
   subscriptions Subscription[]
   overrides     CompanyCapability[]
@@ -1362,6 +1365,46 @@ model CompanyLink {
   @@map("company_links")
 }
 
+/// Stock moved between two of one company's own warehouses.
+///
+/// A record rather than only an audit line, because "what moved last week?" is
+/// a question a distributor asks their own data, and an AuditLog row is not
+/// something you can filter a screen by.
+///
+/// Deliberately has no status: this records a move that has already happened
+/// on the shelf, not one in transit. Tracking a lorry between two of your own
+/// warehouses is a different feature with a different lifecycle, and inventing
+/// its state machine here would be guessing at it.
+model StockTransfer {
+  /// Tenant this row belongs to. Enforced by Row-Level Security.
+  companyId String  @db.Uuid
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  id              String @id @default(uuid()) @db.Uuid
+  fromWarehouseId String @db.Uuid
+  toWarehouseId   String @db.Uuid
+  medicineId      String @db.Uuid
+
+  /// Snapshotted, so the record still reads correctly if the batch is later
+  /// removed from either warehouse.
+  batchNumber String @db.VarChar(60)
+  quantity    Int
+
+  note           String? @db.Text
+  transferredById String @db.Uuid
+
+  createdAt DateTime @default(now())
+
+  fromWarehouse Warehouse @relation("TransferFrom", fields: [fromWarehouseId], references: [id])
+  toWarehouse   Warehouse @relation("TransferTo", fields: [toWarehouseId], references: [id])
+  medicine      Medicine  @relation(fields: [medicineId], references: [id])
+  transferredBy User      @relation("StockTransferActor", fields: [transferredById], references: [id])
+
+  @@index([companyId, createdAt])
+  @@index([medicineId, createdAt])
+  @@map("stock_transfers")
+}
+
 /// A place a company ships from. Carries the geography, so the Same-Day radius
 /// works identically in both business modes — it just picks the nearest
 /// warehouse of whichever companies are sellable.
@@ -1387,6 +1430,8 @@ model Warehouse {
   inventoryItems InventoryItem[]
   orders         Order[]         @relation("WarehouseOrders")
   offers         MedicineOffer[]
+  transfersOut   StockTransfer[] @relation("TransferFrom")
+  transfersIn    StockTransfer[] @relation("TransferTo")
 
   @@index([companyId, isAcceptingOrders])
   @@map("warehouses")

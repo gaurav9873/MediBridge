@@ -11,6 +11,7 @@ import {
   Package,
   Truck,
   UserCog,
+  Warehouse,
 } from 'lucide-react'
 import { usePathname, useRouter } from 'next/navigation'
 import * as React from 'react'
@@ -30,7 +31,13 @@ import { useSession, useSignOut } from '@/lib/use-session'
  */
 const distributorNav: readonly NavItem[] = [
   { href: '/inventory', label: copy.common.nav.inventory, icon: <Package /> },
-  { href: '/inventory/expiring', label: copy.inventory.expiryAlerts.page.title, icon: <Truck /> },
+  { href: '/warehouses', label: copy.inventory.warehouses.page.title, icon: <Warehouse /> },
+  {
+    href: '/inventory/expiring',
+    label: copy.inventory.expiryAlerts.page.title,
+    icon: <Truck />,
+    mobile: false,
+  },
   {
     href: '/account/medicine-requests',
     label: copy.admin.medicines.requests.mine.page.title,

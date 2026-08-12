@@ -18,6 +18,7 @@ import {
   inventoryItemSchema,
   inventoryItemUpdateSchema,
   inventoryListSchema,
+  stockTransferSchema,
 } from '@medibridge/types'
 import { validate } from '../common/pipes/zod-validation.pipe'
 import { CurrentUser } from '../auth/auth.guard'
@@ -27,6 +28,11 @@ import {
   type InventoryItemSummary,
   type InventorySummary,
 } from './inventory.service'
+import {
+  StockTransferService,
+  type StockTransferSummary,
+  type WarehouseStock,
+} from './stock-transfer.service'
 
 /**
  * A distributor's own stock.
@@ -43,7 +49,10 @@ import {
 @ApiTags('Inventory')
 @Controller('inventory')
 export class InventoryController {
-  constructor(private readonly inventory: InventoryService) {}
+  constructor(
+    private readonly inventory: InventoryService,
+    private readonly transfers: StockTransferService,
+  ) {}
 
   @RequirePermission(Permission.INVENTORY_VIEW)
   @Get()
@@ -60,6 +69,31 @@ export class InventoryController {
   @ApiOperation({ summary: 'Counts for the stock dashboard' })
   async summary(): Promise<InventorySummary> {
     return this.inventory.summary()
+  }
+
+  @RequirePermission(Permission.INVENTORY_VIEW)
+  @Get('warehouses')
+  @ApiOperation({ summary: 'What each of your warehouses is holding' })
+  async byWarehouse(): Promise<WarehouseStock[]> {
+    return this.transfers.stockByWarehouse()
+  }
+
+  @RequirePermission(Permission.INVENTORY_VIEW)
+  @Get('transfers')
+  @ApiOperation({ summary: 'Recent stock movements between your warehouses' })
+  async transferHistory(): Promise<StockTransferSummary[]> {
+    return this.transfers.history()
+  }
+
+  @RequirePermission(Permission.INVENTORY_MANAGE)
+  @Post('transfers')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Move stock to another of your warehouses' })
+  async transfer(
+    @CurrentUser() user: SessionUser,
+    @Body(validate(stockTransferSchema)) body: Parameters<StockTransferService['transfer']>[1],
+  ): Promise<StockTransferSummary> {
+    return this.transfers.transfer(user, body)
   }
 
   @RequirePermission(Permission.INVENTORY_MANAGE)

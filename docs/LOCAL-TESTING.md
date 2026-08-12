@@ -1,4 +1,4 @@
-# Local testing — Phases 2, 3.1 and 3.2
+# Local testing — Phases 2, 3.1, 3.2 and 3.3
 
 Everything below runs on your machine. No staging, no cloud, no accounts to
 create anywhere.
@@ -46,8 +46,8 @@ useful.
 npm run typecheck          # expect: no output
 npx eslint apps packages   # expect: 0 errors (warnings are fine)
 npm run build              # expect: Tasks: 4 successful
-npm run test               # expect: Tests: 60 passed
-npm run verify:isolation   # expect: All 16 isolation checks passed
+npm run test               # expect: Tests: 63 passed
+npm run verify:isolation   # expect: All 18 isolation checks passed
 ```
 
 `verify:isolation` is the important one. It connects as the **restricted**
@@ -391,6 +391,26 @@ without repricing it.
 - [ ] Open MedPlus's batch id directly, e.g. `/inventory/<that id>` -> **not found**,
       not "forbidden". The row is invisible, not merely off-limits.
 
+#### Stock by warehouse and transfers — Phase 3.3
+
+MedPlus is seeded with one warehouse, so add a second under
+`/account/company` first (any Pune address will do).
+
+- [ ] `/warehouses` totals each location: batches, units free to sell, running
+      low, expiring soon, and value
+- [ ] The new warehouse shows all zeros
+- [ ] **Move Stock** -> search `DL650B117` -> pick the Dolo 650 batch
+- [ ] It shows where the batch currently is and how many units are free to move
+- [ ] Try to move it to the warehouse it is already in -> refused
+- [ ] Try to move more units than are free -> refused, naming the number
+- [ ] Move 200 units -> both warehouses update, and the totals still add up to
+      what you started with
+- [ ] The batch now appears at **both** locations with the same batch number,
+      expiry and MRP
+- [ ] Move another 50 -> the destination row goes to 250 rather than a second
+      row appearing
+- [ ] **Recent moves** lists both, with who moved them and any note
+
 ### 4.9 Mobile layout
 
 The quickest honest check is a real phone-sized viewport, not a narrow window.
@@ -407,6 +427,7 @@ reachable with a thumb:
 - [ ] `/admin/medicines`, `/admin/medicines/new`, `/admin/medicines/requests`
 - [ ] a medicine's edit, duplicates and merge screens
 - [ ] `/inventory`, `/inventory/new`, `/inventory/expiring`, and a batch's edit screen
+- [ ] `/warehouses`, including the Move Stock dialog
 
 Then repeat at **iPad (768px)** and a normal desktop window.
 
@@ -451,7 +472,7 @@ docker compose exec postgres psql -U medibridge -d medibridge -t -c \
 Do not report these as bugs:
 
 - **No ordering.** Cart, checkout, orders and payments are Phase 3. A retailer can search but not buy.
-- **No ordering or search screens.** Medicine master (3.1) and inventory (3.2) are built; warehouse transfers are 3.3 and the rest follows.
+- **No ordering or search screens.** Medicine master (3.1), inventory (3.2) and warehouse transfers (3.3) are built; bulk import UI is 3.4 and the rest follows.
 - **Inventory has no bulk edit and no stock history screen.** See [INVENTORY.md](INVENTORY.md#known-limitations) for that module's full list.
 - **Medicine list sorting is fixed** at name A–Z, and page size at 25. The API supports neither a sort parameter nor a page-size control yet. See [MEDICINE-MASTER.md](MEDICINE-MASTER.md#known-limitations) for the full list of that module's limitations.
 - **No SMS or email actually sends.** Codes appear on screen; notification preferences are stored but nothing dispatches yet.
@@ -507,12 +528,12 @@ otherwise you are testing the previous build and will not know it.
 
 ## 7. What "done" looks like
 
-Phases 2, 3.1 and 3.2 pass locally when:
+Phases 2, 3.1, 3.2 and 3.3 pass locally when:
 
 - all five automated checks pass
 - every box in section 4 is ticked
 - nothing scrolls sideways at 375px, 390px, 768px or 1280px
-- one tenant cannot see another's anything — including medicine requests
+- one tenant cannot see another's anything — including medicine requests and stock transfers
 
-At that point Phase 3.3 can start: warehouse, then bulk import UI, search,
-cart, orders, payments, delivery and notifications in that order.
+At that point Phase 3.4 can start: bulk import UI, then search, cart, orders,
+payments, delivery and notifications in that order.

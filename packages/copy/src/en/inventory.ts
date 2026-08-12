@@ -334,6 +334,108 @@ export const inventory = {
     success: (count: number) => `${count} medicines added to your stock.`,
   },
 
+  /**
+   * Stock seen a warehouse at a time, and moved between them.
+   *
+   * A distributor with two hubs thinks in locations before they think in
+   * batches: "what is in Pune?" comes before "how much Dolo?".
+   */
+  warehouses: {
+    page: {
+      title: 'Stock by Warehouse',
+      subtitle: 'What each of your locations is holding, and what has moved between them.',
+    } satisfies PageMeta,
+    columns: {
+      warehouse: 'Warehouse',
+      batches: 'Batches',
+      units: 'Units free to sell',
+      lowStock: 'Running low',
+      expiringSoon: 'Expiring soon',
+      value: 'Stock value',
+    },
+    notAccepting: 'Not accepting orders',
+    viewStock: 'View its stock',
+    empty: {
+      title: 'No warehouses yet',
+      body: 'Stock is held somewhere physical, so add a location before listing any. Warehouses live under Business settings.',
+      action: { label: 'Go to Business settings', href: '/account/company' },
+    } satisfies EmptyState,
+    help: {
+      whatIsThis:
+        'Your stock totalled up one location at a time, so you can see where things are running low and move stock between your own warehouses.',
+      topics: [
+        {
+          question: 'Why is "units free to sell" lower than what I counted?',
+          answer:
+            'Units already in a retailer’s cart are not free to sell — they are promised. The total here leaves them out so you are never counting the same unit twice.',
+        },
+        {
+          question: 'What happens when I move stock?',
+          answer:
+            'The quantity leaves one warehouse and arrives at the other straight away, keeping the same batch number and expiry. Record it once the stock has physically moved.',
+        },
+        {
+          question: 'Can I move stock to another distributor?',
+          answer:
+            'No. Transfers are only between your own locations. Selling to another business is an order, not a transfer.',
+        },
+      ],
+    } satisfies PageHelp,
+
+    transfer: {
+      cta: 'Move Stock',
+      title: 'Move stock to another warehouse',
+      intro:
+        'Record stock that has physically moved between your locations. The batch number and expiry travel with it.',
+      fields: {
+        batch: {
+          label: 'Which batch?',
+          helperText: 'Search your stock by medicine name or batch number.',
+          placeholder: 'e.g. Dolo 650 or DL650B117',
+        } satisfies FieldHelp,
+        toWarehouse: {
+          label: 'Move it to',
+          helperText: 'The location the stock has gone to.',
+        } satisfies FieldHelp,
+        quantity: {
+          label: 'How many units?',
+          helperText: 'Only units that are not already in a retailer’s cart can move.',
+          placeholder: '50',
+        } satisfies FieldHelp,
+        note: {
+          label: 'Note',
+          helperText: 'Optional. Anything worth remembering about this move.',
+          placeholder: 'e.g. Sent on the Tuesday van',
+        } satisfies FieldHelp,
+      },
+      freeToMove: (count: number) =>
+        count === 0
+          ? 'Nothing in this batch is free to move — every unit is in a retailer’s cart.'
+          : `${count} units are free to move.`,
+      currentlyAt: (warehouse: string) => `Currently at ${warehouse}`,
+      submit: 'Record the move',
+      cancel: 'Cancel',
+      success: (quantity: number, warehouse: string) =>
+        `${quantity} units moved to ${warehouse}.`,
+      confirm: {
+        title: 'Record this move?',
+        body: 'The stock leaves one warehouse and arrives at the other immediately. Only do this once it has physically moved.',
+        confirmLabel: 'Yes, move it',
+      },
+    },
+
+    history: {
+      heading: 'Recent moves',
+      movedBy: (person: string) => `Moved by ${person}`,
+      summary: (quantity: number, from: string, to: string) =>
+        `${quantity} units · ${from} to ${to}`,
+      empty: {
+        title: 'Nothing has moved yet',
+        body: 'When you move stock between your warehouses, each move is recorded here.',
+      } satisfies EmptyState,
+    },
+  },
+
   expiryAlerts: {
     page: {
       title: 'Expiring Soon',

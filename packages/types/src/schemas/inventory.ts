@@ -181,6 +181,24 @@ export const inventoryListSchema = z.object({
 })
 export type InventoryListQuery = z.infer<typeof inventoryListSchema>
 
+/**
+ * Moving stock between two of your own warehouses.
+ *
+ * The batch is identified by the inventory row it is leaving, not by medicine
+ * plus batch number: the same batch can sit in two warehouses at once, and
+ * "which one is it leaving?" is the whole question.
+ */
+export const stockTransferSchema = z.object({
+  inventoryItemId: z.uuid(v.selectRequired('batch')),
+  toWarehouseId: z.uuid(v.selectRequired('destination warehouse')),
+  quantity: z
+    .number(v.number.notANumber)
+    .int(v.number.wholeNumber)
+    .positive(v.number.positive),
+  note: z.string().trim().max(500, v.text.tooLong(500)).optional(),
+})
+export type StockTransferInput = z.infer<typeof stockTransferSchema>
+
 /** Merging a duplicate into the row that should survive. */
 export const mergeMedicineSchema = z.object({
   keepId: z.uuid(),

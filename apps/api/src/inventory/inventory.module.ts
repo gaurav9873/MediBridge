@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common'
 import { InventoryController } from './inventory.controller'
 import { InventoryService } from './inventory.service'
+import { StockTransferService } from './stock-transfer.service'
 
 /**
  * A distributor's stock.
@@ -16,7 +17,7 @@ import { InventoryService } from './inventory.service'
  */
 @Module({
   controllers: [InventoryController],
-  providers: [InventoryService],
-  exports: [InventoryService],
+  providers: [InventoryService, StockTransferService],
+  exports: [InventoryService, StockTransferService],
 })
 export class InventoryModule {}

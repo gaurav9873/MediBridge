@@ -63,6 +63,30 @@ export interface InventorySummary {
   stockValuePaise: number
 }
 
+export interface WarehouseStock {
+  warehouseId: string
+  warehouseName: string
+  isAcceptingOrders: boolean
+  batches: number
+  units: number
+  lowStock: number
+  expiringSoon: number
+  stockValuePaise: number
+}
+
+export interface StockTransfer {
+  id: string
+  medicineName: string
+  brand: string
+  batchNumber: string
+  quantity: number
+  fromWarehouseName: string
+  toWarehouseName: string
+  transferredBy: string
+  note: string | null
+  createdAt: string
+}
+
 export interface Warehouse {
   id: string
   name: string
@@ -135,4 +159,12 @@ export const inventoryApi = {
     api.patch<InventoryItem>(`/inventory/${id}`, input),
   remove: (id: string) => api.delete<{ removed: true }>(`/inventory/${id}`),
   warehouses: () => api.get<Warehouse[]>('/company/warehouses'),
+  stockByWarehouse: () => api.get<WarehouseStock[]>('/inventory/warehouses'),
+  transfers: () => api.get<StockTransfer[]>('/inventory/transfers'),
+  transfer: (input: {
+    inventoryItemId: string
+    toWarehouseId: string
+    quantity: number
+    note?: string
+  }) => api.post<StockTransfer>('/inventory/transfers', input),
 }

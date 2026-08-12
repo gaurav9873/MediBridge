@@ -1,6 +1,6 @@
 # Inventory
 
-Phase 3.2. A distributor's own stock, batch by batch, and the four screens that
+Phases 3.2 and 3.3. A distributor's own stock, batch by batch, and the five screens that
 manage it.
 
 ---
@@ -23,12 +23,13 @@ allowed to come from is the session.
 
 ## The screens
 
-| # | Screen | Route |
-| - | ------ | ----- |
-| 1 | Stock list | `/inventory` |
-| 2 | Add batch | `/inventory/new` |
-| 3 | Edit batch | `/inventory/[id]` |
-| 4 | Expiring soon | `/inventory/expiring` |
+| # | Screen | Route | Phase |
+| - | ------ | ----- | ----- |
+| 1 | Stock list | `/inventory` | 3.2 |
+| 2 | Add batch | `/inventory/new` | 3.2 |
+| 3 | Edit batch | `/inventory/[id]` | 3.2 |
+| 4 | Expiring soon | `/inventory/expiring` | 3.2 |
+| 5 | Stock by warehouse, and transfers | `/warehouses` | 3.3 |
 
 They live in a `(distributor)` route group whose layout reuses the same
 `AppShell` the admin panel uses — sidebar on desktop, thumb-reachable bottom
@@ -79,6 +80,9 @@ All under `/api/v1`, all tenant-scoped by RLS.
 | ------ | ---- | ---------- |
 | `GET` | `/inventory` | `INVENTORY_VIEW` |
 | `GET` | `/inventory/summary` | `INVENTORY_VIEW` |
+| `GET` | `/inventory/warehouses` | `INVENTORY_VIEW` |
+| `GET` | `/inventory/transfers` | `INVENTORY_VIEW` |
+| `POST` | `/inventory/transfers` | `INVENTORY_MANAGE` |
 | `GET` | `/inventory/:id` | `INVENTORY_VIEW` |
 | `POST` | `/inventory` | `INVENTORY_MANAGE` |
 | `PATCH` | `/inventory/:id` | `INVENTORY_MANAGE` |
@@ -118,6 +122,7 @@ module sits on both sides of it, so the rules are split accordingly:
 | `availableQuantity` | Physical stock minus what is in carts |
 | `stockLevel` | `outOfStock` / `lowStock` / `inStock` |
 | `canSetQuantityTo` | Whether a correction would oversell reserved stock |
+| `transferableQuantity` / `canTransfer` | How much of a batch may move to another warehouse |
 
 Surgical supplies would bring their own expiry rules and reuse the counting
 unchanged. That is the point of the split.
@@ -137,6 +142,41 @@ them they are well stocked is how it stays that way.
 `expired` because those are the exact keys in `stockPresentation`. The status
 crosses from the domain rules to the screen's icon and colour without a
 translation step that could disagree.
+
+---
+
+## Warehouse transfers — Phase 3.3
+
+Moving stock between two of **your own** warehouses. Selling to another
+business is an order, not a transfer, and the destination lookup runs under RLS
+so another company's warehouse is simply invisible.
+
+The whole move is one transaction, because a transfer that half-happens either
+invents stock or destroys it.
+
+**What travels, and what does not.** The batch number, expiry and MRP are the
+physical goods and cross unchanged. The selling price, minimum order and
+low-stock threshold are copied as a starting point and can be edited at the
+destination — the same batch can reasonably be priced differently in two
+cities.
+
+**Merge, do not duplicate.** If the destination already holds that exact batch,
+the quantities merge into the existing row. Otherwise the batch is recreated
+there. Either way one batch number never becomes two rows in one warehouse.
+
+**Only free stock moves.** Reserved units belong to carts mid-checkout at the
+*source* warehouse; moving them would leave those orders to be picked from a
+shelf that no longer has the stock.
+
+**No status, deliberately.** `StockTransfer` records a move that has already
+happened on the shelf. Tracking a lorry between two of your own warehouses is a
+different feature with its own lifecycle, and inventing that state machine here
+would be guessing at it.
+
+`stock_transfers` is a tenant table with its own RLS policy, and
+`verify:isolation` gained an explicit behavioural check for it in the same
+commit — the generic check proves the table *has* a policy, the new one proves
+the policy does what it claims.
 
 ---
 
@@ -189,8 +229,12 @@ writes a row from a script or a bulk import.
 - **`lowStockThreshold` is per batch, not per medicine.** Two batches of the
   same medicine each carry their own threshold, which is right for stock
   counting and slightly odd for reordering.
-- **Warehouse transfers are not built.** Moving stock between your own
-  locations is Phase 3.3.
+- **Transfers are immediate, with no in-transit state.** You record a move
+  after the stock has physically moved. A batch cannot be shown as "on the van".
+- **Transfers cannot be reversed in one action.** Moving it back is a second
+  transfer, which is honest but means two rows in the history.
+- **A transfer moves one batch at a time.** Shifting a whole warehouse is one
+  batch per move.
 
 ---
 

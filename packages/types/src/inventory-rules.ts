@@ -71,3 +71,19 @@ export function isLowStock(item: StockLevels): boolean {
 export function canSetQuantityTo(item: StockCounts, next: number): boolean {
   return next >= 0 && next >= item.reservedQuantity
 }
+
+/**
+ * How much of a batch may be moved to another warehouse.
+ *
+ * The same answer as "how much can be sold": reserved units belong to carts
+ * that are mid-checkout at THIS warehouse, and moving them would leave those
+ * orders to be picked from a shelf that no longer has the stock.
+ */
+export function transferableQuantity(item: StockCounts): number {
+  return availableQuantity(item)
+}
+
+/** Whether a proposed transfer is a whole, positive, affordable amount. */
+export function canTransfer(item: StockCounts, quantity: number): boolean {
+  return Number.isInteger(quantity) && quantity > 0 && quantity <= transferableQuantity(item)
+}

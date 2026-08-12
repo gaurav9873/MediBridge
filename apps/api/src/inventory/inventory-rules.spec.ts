@@ -3,11 +3,13 @@ import {
   MINIMUM_SHELF_LIFE_DAYS,
   availableQuantity,
   canSetQuantityTo,
+  canTransfer,
   daysUntilExpiry,
   expiryStatus,
   hasMinimumShelfLife,
   isLowStock,
   stockLevel,
+  transferableQuantity,
 } from '@medibridge/types'
 
 /**
@@ -153,5 +155,30 @@ describe('minimum shelf life to list a batch', () => {
     // If the listing floor ever exceeded the warning window, a batch would be
     // unlistable before anyone was told it was expiring.
     expect(MINIMUM_SHELF_LIFE_DAYS).toBeLessThan(EXPIRY_WARNING_DAYS)
+  })
+})
+
+describe('moving stock between your own warehouses', () => {
+  const item = { quantity: 100, reservedQuantity: 30 }
+
+  it('can only move what is free to sell', () => {
+    // Reserved units belong to carts mid-checkout AT THIS warehouse. Moving
+    // them would leave those orders to be picked from a shelf that no longer
+    // has the stock.
+    expect(transferableQuantity(item)).toBe(70)
+    expect(canTransfer(item, 70)).toBe(true)
+    expect(canTransfer(item, 71)).toBe(false)
+  })
+
+  it('refuses nothing, negatives and fractions', () => {
+    // A fraction of a strip is not a thing that can be put on a lorry.
+    expect(canTransfer(item, 0)).toBe(false)
+    expect(canTransfer(item, -5)).toBe(false)
+    expect(canTransfer(item, 1.5)).toBe(false)
+  })
+
+  it('refuses everything when the whole batch is spoken for', () => {
+    expect(transferableQuantity({ quantity: 40, reservedQuantity: 40 })).toBe(0)
+    expect(canTransfer({ quantity: 40, reservedQuantity: 40 }, 1)).toBe(false)
   })
 })

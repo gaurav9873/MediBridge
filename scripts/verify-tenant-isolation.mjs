@@ -134,6 +134,17 @@ async function main() {
     check(`${slug} sees its own batches and no others`, visible, owned)
   }
 
+  // Stock transfers are tenant rows too. The generic policy check above proves
+  // the table HAS a policy; this proves the policy does what it claims.
+  for (const slug of ['medplus-wholesale', 'wellness-distributors']) {
+    const owned = await expected(
+      client,
+      `SELECT count(*) FROM stock_transfers WHERE "companyId" = '${id[slug]}'`,
+    )
+    const visible = await asTenant(client, id[slug], 'SELECT count(*) FROM stock_transfers')
+    check(`${slug} sees its own stock transfers and no others`, visible, owned)
+  }
+
   console.log('\nA marketplace reads its sellers\' shop window, not their books\n')
 
   const linked = `SELECT "sellerId" FROM company_links WHERE "marketplaceId" = '${id.medibridge}' AND "isActive"`
