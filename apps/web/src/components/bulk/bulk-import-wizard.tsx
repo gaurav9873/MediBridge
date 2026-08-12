@@ -1,6 +1,7 @@
 'use client'
 
 import type { BulkJobSummary, RowIssue } from '@medibridge/types'
+import { copy } from '@medibridge/copy'
 import { Alert, Button, notify } from '@medibridge/ui'
 import * as Dialog from '@radix-ui/react-dialog'
 import { useQuery } from '@tanstack/react-query'
@@ -20,25 +21,24 @@ const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4100/api/v1'
  * Steps: choose → upload → we check it → you confirm → done.
  */
 
-interface ImportType {
-  value: string
-  label: string
-  description: string
-}
+/**
+ * The options come from the SERVER, not from a list in here.
+ *
+ * `GET /bulk/types` answers with the operations this user may actually run —
+ * each handler's own `authorize` decides — so an admin sees medicines, a
+ * seller sees stock, and adding a handler never means editing this file. The
+ * words come from the copy layer, keyed by the same type string.
+ */
+type ImportTypeKey = keyof typeof copy.inventory.bulkUpload.types
 
-const IMPORT_TYPES: ImportType[] = [
-  {
-    value: 'MEDICINE_IMPORT',
-    label: 'Medicines',
-    description: 'Add new medicines to the shared catalogue, or update existing ones.',
-  },
-  {
-    value: 'INVENTORY_STOCK_UPDATE',
-    label: 'Stock Update',
-    description:
-      'Update quantity, price, MRP or expiry for batches you already stock. Nothing is deleted.',
-  },
-]
+function describeType(type: string): { label: string; description: string } {
+  return (
+    copy.inventory.bulkUpload.types[type as ImportTypeKey] ?? {
+      label: type,
+      description: '',
+    }
+  )
+}
 
 type Step = 'choose' | 'upload' | 'checking' | 'review' | 'importing' | 'done'
 
@@ -53,11 +53,29 @@ export function BulkImportWizard({
 }): React.JSX.Element {
   // Only the pre-upload steps are local; the rest are derived from the job.
   const [localStep, setLocalStep] = React.useState<'choose' | 'upload'>('choose')
-  const [type, setType] = React.useState<string>(IMPORT_TYPES[0]?.value ?? '')
+  const [type, setType] = React.useState<string>('')
   const [file, setFile] = React.useState<File | null>(null)
   const [jobId, setJobId] = React.useState<string | null>(null)
   const [uploading, setUploading] = React.useState(false)
   const [uploadError, setUploadError] = React.useState<string | null>(null)
+
+  // Which operations this user may run. Asked for once the wizard opens, so a
+  // closed dialog costs nothing.
+  const { data: available } = useQuery({
+    queryKey: ['bulk', 'types'],
+    queryFn: () => api.get<{ types: string[] }>('/bulk/types'),
+    enabled: open,
+    staleTime: 5 * 60_000,
+  })
+
+  const options = React.useMemo(
+    () => (available?.types ?? []).map((value) => ({ value, ...describeType(value) })),
+    [available],
+  )
+
+  // Preselect when there is only one thing they can do. Derived rather than
+  // pushed into state by an effect, which would re-render for no reason.
+  const chosenType = type || (options.length === 1 ? (options[0]?.value ?? '') : '')
 
   // Poll the job while it is working. Polling rather than a socket: for a job
   // measured in seconds-to-minutes it is indistinguishable, and it survives
@@ -116,7 +134,7 @@ export function BulkImportWizard({
       // FormData, so this cannot go through the JSON api client.
       const body = new FormData()
       body.append('file', file)
-      const response = await fetch(`${API}/bulk/${type}/upload`, {
+      const response = await fetch(`${API}/bulk/${chosenType}/upload`, {
         method: 'POST',
         credentials: 'include',
         body,
@@ -150,7 +168,7 @@ export function BulkImportWizard({
     }
   }
 
-  const selected = IMPORT_TYPES.find((option) => option.value === type)
+  const selected = options.find((option) => option.value === chosenType)
 
   return (
     <Dialog.Root
@@ -190,11 +208,11 @@ export function BulkImportWizard({
                   <legend className="mb-2 text-sm font-medium text-content-primary">
                     What do you want to import?
                   </legend>
-                  {IMPORT_TYPES.map((option) => (
+                  {options.map((option) => (
                     <label
                       key={option.value}
                       className={`flex cursor-pointer gap-3 rounded-(--radius-md) border p-3 ${
-                        type === option.value
+                        chosenType === option.value
                           ? 'border-brand-600 bg-brand-50'
                           : 'border-border-strong hover:bg-surface-hover'
                       }`}
@@ -203,7 +221,7 @@ export function BulkImportWizard({
                         type="radio"
                         name="import-type"
                         value={option.value}
-                        checked={type === option.value}
+                        checked={chosenType === option.value}
                         onChange={(event) => setType(event.target.value)}
                         className="mt-1 size-5 shrink-0 accent-brand-600"
                       />
@@ -218,7 +236,7 @@ export function BulkImportWizard({
                 </fieldset>
 
                 <Button asChild variant="secondary" size="lg" fullWidth>
-                  <a href={`${API}/bulk/templates/${type}`} download>
+                  <a href={`${API}/bulk/templates/${chosenType}`} download>
                     <Download className="size-5" aria-hidden /> Download the {selected?.label}{' '}
                     template
                   </a>

@@ -66,9 +66,11 @@ export class BulkService {
     }
 
     // One active import per user: two runs of the same sheet would race.
-    const active = await this.db.raw.bulkJob.count({
-      where: { createdById: user.id, status: { in: [...ACTIVE_BULK_STATUSES] } },
-    })
+    const active = await this.db.run((tx) =>
+      tx.bulkJob.count({
+        where: { createdById: user.id, status: { in: [...ACTIVE_BULK_STATUSES] } },
+      }),
+    )
     if (active >= BULK_LIMITS.maxConcurrentPerUser) {
       throw new AppException(ApiErrorCode.CONFLICT, {
         fields: [
@@ -108,7 +110,7 @@ export class BulkService {
       name: `source${extensionOf(file.originalname)}`,
     })
     await this.storage.write(fileKey, file.buffer)
-    await this.db.raw.bulkJob.update({ where: { id: job.id }, data: { fileKey } })
+    await this.db.run((tx) => tx.bulkJob.update({ where: { id: job.id }, data: { fileKey } }))
 
     await this.queue.enqueue({ jobId: job.id, pass: 'validate' })
 
@@ -116,10 +118,12 @@ export class BulkService {
   }
 
   async getJob(jobId: string, user: SessionUser): Promise<BulkJobSummary> {
-    const job = await this.db.raw.bulkJob.findUnique({
-      where: { id: jobId },
-      include: { createdBy: { select: { fullName: true } } },
-    })
+    const job = await this.db.run((tx) =>
+      tx.bulkJob.findUnique({
+        where: { id: jobId },
+        include: { createdBy: { select: { fullName: true } } },
+      }),
+    )
     if (!job) throw new AppException(ApiErrorCode.NOT_FOUND)
     this.assertOwnership(job, user)
     return toSummary(job)
@@ -129,12 +133,14 @@ export class BulkService {
   async getPreview(jobId: string, user: SessionUser): Promise<BulkJobPreview> {
     const summary = await this.getJob(jobId, user)
 
-    const issues = await this.db.raw.bulkJobError.findMany({
-      where: { jobId },
-      orderBy: { rowNumber: 'asc' },
-      take: BULK_LIMITS.previewSampleSize,
-      select: { rowNumber: true, column: true, value: true, message: true },
-    })
+    const issues = await this.db.run((tx) =>
+      tx.bulkJobError.findMany({
+        where: { jobId },
+        orderBy: { rowNumber: 'asc' },
+        take: BULK_LIMITS.previewSampleSize,
+        select: { rowNumber: true, column: true, value: true, message: true },
+      }),
+    )
 
     return {
       job: summary,
@@ -167,10 +173,12 @@ export class BulkService {
       })
     }
 
-    await this.db.raw.bulkJob.update({
-      where: { id: jobId },
-      data: { confirmedAt: new Date(), processedRows: 0 },
-    })
+    await this.db.run((tx) =>
+      tx.bulkJob.update({
+        where: { id: jobId },
+        data: { confirmedAt: new Date(), processedRows: 0 },
+      }),
+    )
     await this.queue.enqueue({ jobId, pass: 'apply' })
 
     return this.getJob(jobId, user)
@@ -185,10 +193,9 @@ export class BulkService {
     if (!ACTIVE_BULK_STATUSES.includes(job.status as never)) {
       throw new AppException(ApiErrorCode.INVALID_STATUS_TRANSITION)
     }
-    await this.db.raw.bulkJob.update({
-      where: { id: jobId },
-      data: { status: BulkJobStatus.PAUSED },
-    })
+    await this.db.run((tx) =>
+      tx.bulkJob.update({ where: { id: jobId }, data: { status: BulkJobStatus.PAUSED } }),
+    )
     return this.getJob(jobId, user)
   }
 
@@ -207,10 +214,12 @@ export class BulkService {
     if (TERMINAL_BULK_STATUSES.includes(job.status as never)) {
       throw new AppException(ApiErrorCode.INVALID_STATUS_TRANSITION)
     }
-    await this.db.raw.bulkJob.update({
-      where: { id: jobId },
-      data: { status: BulkJobStatus.CANCELLED, finishedAt: new Date() },
-    })
+    await this.db.run((tx) =>
+      tx.bulkJob.update({
+        where: { id: jobId },
+        data: { status: BulkJobStatus.CANCELLED, finishedAt: new Date() },
+      }),
+    )
     return this.getJob(jobId, user)
   }
 
@@ -222,16 +231,18 @@ export class BulkService {
       ...(query.status ? { status: query.status } : {}),
     }
 
-    const [items, total] = await Promise.all([
-      this.db.raw.bulkJob.findMany({
-        where,
-        include: { createdBy: { select: { fullName: true } } },
-        orderBy: { queuedAt: 'desc' },
-        skip: (query.page - 1) * query.pageSize,
-        take: query.pageSize,
-      }),
-      this.db.raw.bulkJob.count({ where }),
-    ])
+    const [items, total] = await this.db.run((tx) =>
+      Promise.all([
+        tx.bulkJob.findMany({
+          where,
+          include: { createdBy: { select: { fullName: true } } },
+          orderBy: { queuedAt: 'desc' },
+          skip: (query.page - 1) * query.pageSize,
+          take: query.pageSize,
+        }),
+        tx.bulkJob.count({ where }),
+      ]),
+    )
 
     return {
       items: items.map(toSummary),
@@ -260,7 +271,7 @@ export class BulkService {
   // -------------------------------------------------------------------------
 
   private async requireJob(jobId: string, user: SessionUser) {
-    const job = await this.db.raw.bulkJob.findUnique({ where: { id: jobId } })
+    const job = await this.db.run((tx) => tx.bulkJob.findUnique({ where: { id: jobId } }))
     if (!job) throw new AppException(ApiErrorCode.NOT_FOUND)
     this.assertOwnership(job, user)
     return job

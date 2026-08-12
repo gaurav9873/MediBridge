@@ -1,4 +1,4 @@
-# Local testing — Phases 2, 3.1, 3.2 and 3.3
+# Local testing — Phases 2 and 3.1–3.4
 
 Everything below runs on your machine. No staging, no cloud, no accounts to
 create anywhere.
@@ -411,6 +411,32 @@ MedPlus is seeded with one warehouse, so add a second under
       row appearing
 - [ ] **Recent moves** lists both, with who moved them and any note
 
+#### Bulk uploads — Phase 3.4
+
+The bulk worker is a **separate process**. Without it a job sits at "Waiting to
+start" forever:
+
+```bash
+npm run worker -w @medibridge/api
+```
+
+As `9000000010`, go to `/imports`.
+
+- [ ] **Upload a Spreadsheet** offers **My Stock** and **Stock Update** — and
+      *not* Medicines, which is the platform team's
+- [ ] Sign in as the admin instead: the same wizard offers **Medicines** only
+- [ ] Download the **My Stock** template — the headings match the form's fields
+- [ ] Upload a file with a bad row (a selling price above the MRP, or an expiry
+      three weeks away) -> the job stops at **Ready — needs your confirmation**
+      and names the row and the problem, with nothing saved yet
+- [ ] A medicine name that is not in the shared list -> told to check the
+      spelling or ask for it from Medicine Requests
+- [ ] A Schedule X medicine -> refused
+- [ ] A batch you already list -> **skipped**, not overwritten
+- [ ] Confirm -> only the good rows are created, and they appear in `/inventory`
+- [ ] Upload the same file again -> every row is now skipped, so a re-upload is
+      safe
+
 ### 4.9 Mobile layout
 
 The quickest honest check is a real phone-sized viewport, not a narrow window.
@@ -428,6 +454,7 @@ reachable with a thumb:
 - [ ] a medicine's edit, duplicates and merge screens
 - [ ] `/inventory`, `/inventory/new`, `/inventory/expiring`, and a batch's edit screen
 - [ ] `/warehouses`, including the Move Stock dialog
+- [ ] `/imports`, including the upload wizard
 
 Then repeat at **iPad (768px)** and a normal desktop window.
 
@@ -472,7 +499,8 @@ docker compose exec postgres psql -U medibridge -d medibridge -t -c \
 Do not report these as bugs:
 
 - **No ordering.** Cart, checkout, orders and payments are Phase 3. A retailer can search but not buy.
-- **No ordering or search screens.** Medicine master (3.1), inventory (3.2) and warehouse transfers (3.3) are built; bulk import UI is 3.4 and the rest follows.
+- **No ordering or search screens.** Medicine master (3.1), inventory (3.2), warehouse transfers (3.3) and bulk uploads (3.4) are built; search is 3.5 and the rest follows.
+- **The bulk worker must be running** for any upload to progress. It is a separate process: `npm run worker -w @medibridge/api`.
 - **Inventory has no bulk edit and no stock history screen.** See [INVENTORY.md](INVENTORY.md#known-limitations) for that module's full list.
 - **Medicine list sorting is fixed** at name A–Z, and page size at 25. The API supports neither a sort parameter nor a page-size control yet. See [MEDICINE-MASTER.md](MEDICINE-MASTER.md#known-limitations) for the full list of that module's limitations.
 - **No SMS or email actually sends.** Codes appear on screen; notification preferences are stored but nothing dispatches yet.
@@ -528,12 +556,12 @@ otherwise you are testing the previous build and will not know it.
 
 ## 7. What "done" looks like
 
-Phases 2, 3.1, 3.2 and 3.3 pass locally when:
+Phases 2 and 3.1–3.4 pass locally when:
 
 - all five automated checks pass
 - every box in section 4 is ticked
 - nothing scrolls sideways at 375px, 390px, 768px or 1280px
 - one tenant cannot see another's anything — including medicine requests and stock transfers
 
-At that point Phase 3.4 can start: bulk import UI, then search, cart, orders,
-payments, delivery and notifications in that order.
+At that point Phase 3.5 can start: search, then cart, orders, payments,
+delivery and notifications in that order.

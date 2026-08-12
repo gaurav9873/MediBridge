@@ -1,7 +1,7 @@
 # Inventory
 
-Phases 3.2 and 3.3. A distributor's own stock, batch by batch, and the five screens that
-manage it.
+Phases 3.2, 3.3 and 3.4. A distributor's own stock, batch by batch, and the six
+screens that manage it.
 
 ---
 
@@ -30,6 +30,7 @@ allowed to come from is the session.
 | 3 | Edit batch | `/inventory/[id]` | 3.2 |
 | 4 | Expiring soon | `/inventory/expiring` | 3.2 |
 | 5 | Stock by warehouse, and transfers | `/warehouses` | 3.3 |
+| 6 | Bulk uploads | `/imports` | 3.4 |
 
 They live in a `(distributor)` route group whose layout reuses the same
 `AppShell` the admin panel uses — sidebar on desktop, thumb-reachable bottom
@@ -213,13 +214,60 @@ writes a row from a script or a bulk import.
 
 ---
 
+## Bulk uploads — Phase 3.4
+
+The bulk engine (streaming, dry run, preview, pause/resume, error reports) was
+built in Phase 2 and is entirely type-agnostic. This phase added the handler a
+distributor actually needs and made the wizard show the right options.
+
+**`INVENTORY_IMPORT` — create only.** A spreadsheet of everything on the
+shelves, which is how a distributor gets started. It never updates: a batch
+already listed at that warehouse is **skipped**, so re-uploading a corrected
+file cannot silently reset prices or counts that have moved on. Changing
+existing stock is `INVENTORY_STOCK_UPDATE`, which matches and updates on
+purpose.
+
+Every rule the single-batch form enforces is enforced here too, from the same
+shared functions — `isSellable` for Schedule X, `hasMinimumShelfLife` for
+expiry, price ≤ MRP. A bulk path that is more permissive than the form is a
+bulk path people use to get around the form.
+
+**The wizard asks the server what to offer.** `GET /bulk/types` now returns the
+operations *this user* may run, decided by each handler's own `authorize` —
+so a seller sees stock imports and a platform admin sees the catalogue, and
+adding a handler never means editing the wizard. The warehouse a seller's rows
+land in comes from their session, never from a column in the file.
+
+### Two pre-existing bugs this phase had to fix
+
+The bulk pipeline could not complete a single job under enforced Row-Level
+Security, and had not been able to since RLS was forced:
+
+1. `BulkService` read jobs through `db.raw`, the restricted client with **no
+   tenant context set**. Every read returned nothing, so `POST /bulk/:type/upload`
+   created the job and then answered `404` — the wizard never received an id.
+   Those reads now go through `db.run`, which is what a request-scoped service
+   should have used all along.
+2. `BulkProcessor` did the same for its own bookkeeping. The worker logged
+   "Starting validate" and then silently stopped, because the job it had just
+   been handed was invisible to it. Its fourteen bookkeeping calls now use
+   `runAsPlatform` with a stated reason — a background worker has no request
+   tenant, and that is the deliberate, logged escape hatch for exactly this.
+
+The handler work itself was already correct: it ran through
+`runAs(job.companyId)`, which is why the tenant boundary was never at risk.
+
+---
+
 ## Known limitations
 
-- **No bulk edit.** Repricing a hundred batches is one at a time, or through
-  the existing spreadsheet upload (`Bulk Imports`), which already has an
-  inventory stock-update handler.
-- **The bulk upload wizard is not linked from these screens yet.** It exists
-  and works; wiring it in is Phase 3.4.
+- **Only two bulk operations exist for a seller**: import new stock, and update
+  existing stock. Dedicated price, expiry and availability updates are declared
+  in `BulkJobType` but have no handler, so they are not offered.
+- **A bulk import always lands in the default warehouse.** Move it afterwards
+  from Stock by Warehouse; the file cannot name a destination.
+- **Confirming a job re-records its row errors**, so a job that failed
+  validation on two rows can report four afterwards. Cosmetic, in the engine.
 - **No stock movement history.** Every change writes an `AuditLog` row, but
   there is no screen showing a batch's history over time.
 - **No reorder suggestions.** "Running low" is a threshold you set yourself,

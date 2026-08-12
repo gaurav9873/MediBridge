@@ -309,6 +309,69 @@ export const inventory = {
   },
 
   bulkUpload: {
+    /**
+     * One entry per registered bulk operation.
+     *
+     * Keyed by BulkJobType so the wizard renders whatever the server says this
+     * user may run — adding a handler does not mean editing the wizard.
+     */
+    types: {
+      MEDICINE_IMPORT: {
+        label: 'Medicines',
+        description: 'Add medicines to the shared list, or correct ones already on it.',
+      },
+      INVENTORY_IMPORT: {
+        label: 'My Stock',
+        description:
+          'List everything on your shelves in one go. Batches you already list are left alone.',
+      },
+      INVENTORY_STOCK_UPDATE: {
+        label: 'Stock Update',
+        description:
+          'Change quantity, price, MRP or expiry on batches you already list. Nothing is deleted.',
+      },
+      INVENTORY_PRICE_UPDATE: { label: 'Price Update', description: 'Not available yet.' },
+      INVENTORY_EXPIRY_UPDATE: { label: 'Expiry Update', description: 'Not available yet.' },
+      INVENTORY_STATUS_UPDATE: { label: 'Availability Update', description: 'Not available yet.' },
+      USER_IMPORT: { label: 'People', description: 'Not available yet.' },
+    },
+    /** The distributor's own imports screen. */
+    distributorPage: {
+      title: 'Bulk Uploads',
+      subtitle: 'Add or update a lot of stock at once using a spreadsheet.',
+    } satisfies PageMeta,
+    distributorHelp: {
+      whatIsThis:
+        'Upload a spreadsheet instead of typing. We check every row and show you exactly what will happen before anything is saved.',
+      topics: [
+        {
+          question: 'Which upload do I want?',
+          answer:
+            '"My Stock" adds batches you do not list yet. "Stock Update" changes ones you already list. Neither ever deletes anything.',
+        },
+        {
+          question: 'What if a row is wrong?',
+          answer:
+            'We tell you the row number and what is wrong with it before anything is saved. Fix those rows and upload again — the good rows are not lost.',
+        },
+        {
+          question: 'Can I upload the same file twice?',
+          answer:
+            'Yes. A "My Stock" upload skips batches you already list rather than overwriting them, so a corrected re-upload is safe.',
+        },
+        {
+          question: 'Where does the stock go?',
+          answer:
+            'Into your default warehouse. Moving it afterwards is what Stock by Warehouse is for.',
+        },
+      ],
+    } satisfies PageHelp,
+    historyHeading: 'Recent uploads',
+    historyEmpty: {
+      title: 'You have not uploaded anything yet',
+      body: 'Upload a spreadsheet to add or update a lot of stock at once. We check every row and show you what will happen before anything is saved.',
+      action: { label: 'Upload a Spreadsheet' },
+    } satisfies EmptyState,
     page: {
       title: 'Upload Your Stock List',
       subtitle: 'Add many medicines at once using a spreadsheet.',

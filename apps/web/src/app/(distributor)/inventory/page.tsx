@@ -180,7 +180,7 @@ export default function InventoryPage(): React.JSX.Element {
       page={c.page}
       help={c.help}
       primaryAction={{ label: c.addCta, href: '/inventory/new' }}
-      secondaryAction={{ label: c.expiringCta, href: '/inventory/expiring' }}
+      secondaryAction={{ label: c.bulkUploadCta, href: '/imports' }}
       toolbar={
         <div className="flex flex-col gap-3">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">

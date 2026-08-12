@@ -10,6 +10,7 @@ import {
   LogOut,
   Package,
   Truck,
+  Upload,
   UserCog,
   Warehouse,
 } from 'lucide-react'
@@ -38,6 +39,7 @@ const distributorNav: readonly NavItem[] = [
     icon: <Truck />,
     mobile: false,
   },
+  { href: '/imports', label: copy.inventory.bulkUpload.distributorPage.title, icon: <Upload />, mobile: false },
   {
     href: '/account/medicine-requests',
     label: copy.admin.medicines.requests.mine.page.title,

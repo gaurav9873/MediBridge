@@ -46,7 +46,9 @@ export class BulkProcessor {
     const scope = await this.buildScope(job)
 
     await this.setStatus(jobId, BulkJobStatus.VALIDATING, { processedRows: 0 })
-    await this.db.raw.bulkJobError.deleteMany({ where: { jobId } })
+    await this.db.runAsPlatform('clear previous errors for a bulk job', (tx) =>
+      tx.bulkJobError.deleteMany({ where: { jobId } }),
+    )
 
     const counts = { create: 0, update: 0, skip: 0, error: 0 }
     const seenKeys = new Set<string>()
@@ -179,7 +181,8 @@ export class BulkProcessor {
         await this.reports.writeErrorFile(errorFileKey, handler.columns, arrayToAsync(failedRows))
       }
 
-      await this.db.raw.bulkJob.update({
+      await this.db.runAsPlatform('update bulk job progress', (tx) =>
+      tx.bulkJob.update({
         where: { id: jobId },
         data: {
           status: BulkJobStatus.AWAITING_CONFIRMATION,
@@ -193,7 +196,8 @@ export class BulkProcessor {
           errorFileKey,
           validatedAt: new Date(),
         },
-      })
+      }),
+    )
 
       this.logger.log(
         `Validated ${jobId}: ${totalRows} rows, ${counts.create} new, ${counts.update} updates, ${counts.error} problems`,
@@ -303,13 +307,15 @@ export class BulkProcessor {
         }
 
         processed += batch.length
-        await this.db.raw.bulkJob.update({
+        await this.db.runAsPlatform('update bulk job progress', (tx) =>
+      tx.bulkJob.update({
           where: { id: jobId },
           data: {
             processedRows: processed,
             createCount: { increment: 0 },
           },
-        })
+        }),
+    )
       }
 
       let resultFileKey: string | null = null
@@ -321,7 +327,8 @@ export class BulkProcessor {
       const finalStatus =
         counts.error > 0 ? BulkJobStatus.COMPLETED_WITH_ERRORS : BulkJobStatus.COMPLETED
 
-      await this.db.raw.bulkJob.update({
+      await this.db.runAsPlatform('update bulk job progress', (tx) =>
+      tx.bulkJob.update({
         where: { id: jobId },
         data: {
           status: finalStatus,
@@ -333,9 +340,11 @@ export class BulkProcessor {
           resultFileKey,
           finishedAt: new Date(),
         },
-      })
+      }),
+    )
 
-      await this.db.raw.auditLog.create({
+      await this.db.runAsPlatform('record a bulk job in the audit log', (tx) =>
+      tx.auditLog.create({
         data: {
           actorId: job.createdById,
           action: `BULK_${job.type}`,
@@ -348,7 +357,8 @@ export class BulkProcessor {
             failed: counts.error,
           },
         },
-      })
+      }),
+    )
 
       await this.notifyFinished(job.createdById, job.type, counts)
 
@@ -440,7 +450,9 @@ export class BulkProcessor {
   // -------------------------------------------------------------------------
 
   private async loadJob(jobId: string) {
-    return this.db.raw.bulkJob.findUnique({ where: { id: jobId } })
+    return this.db.runAsPlatform('load a bulk job by id', (tx) =>
+      tx.bulkJob.findUnique({ where: { id: jobId } }),
+    )
   }
 
   /** The scope is rebuilt from the job's owner, never from the file. */
@@ -448,10 +460,12 @@ export class BulkProcessor {
     createdById: string
     scopeId: string | null
   }): Promise<BulkScope> {
-    const user = await this.db.raw.user.findUniqueOrThrow({
+    const user = await this.db.runAsPlatform('load the user who started a bulk job', (tx) =>
+      tx.user.findUniqueOrThrow({
       where: { id: job.createdById },
       select: { id: true, role: true },
-    })
+    }),
+    )
     return {
       userId: user.id,
       role: user.role,
@@ -461,10 +475,12 @@ export class BulkProcessor {
 
   /** Checked every batch so pause and cancel take effect promptly. */
   private async shouldStop(jobId: string): Promise<boolean> {
-    const current = await this.db.raw.bulkJob.findUnique({
+    const current = await this.db.runAsPlatform('load a bulk job by id', (tx) =>
+      tx.bulkJob.findUnique({
       where: { id: jobId },
       select: { status: true },
-    })
+    }),
+    )
     return current?.status === BulkJobStatus.PAUSED || current?.status === BulkJobStatus.CANCELLED
   }
 
@@ -473,21 +489,27 @@ export class BulkProcessor {
     status: BulkJobStatus,
     extra: Record<string, unknown> = {},
   ): Promise<void> {
-    await this.db.raw.bulkJob.update({ where: { id: jobId }, data: { status, ...extra } })
+    await this.db.runAsPlatform('update bulk job progress', (tx) =>
+      tx.bulkJob.update({ where: { id: jobId }, data: { status, ...extra } }),
+    )
   }
 
   private async bumpProgress(jobId: string, rows: number): Promise<void> {
-    await this.db.raw.bulkJob.update({
+    await this.db.runAsPlatform('update bulk job progress', (tx) =>
+      tx.bulkJob.update({
       where: { id: jobId },
       data: { processedRows: { increment: rows } },
-    })
+    }),
+    )
   }
 
   private async fail(jobId: string, reason: string): Promise<void> {
-    await this.db.raw.bulkJob.update({
+    await this.db.runAsPlatform('update bulk job progress', (tx) =>
+      tx.bulkJob.update({
       where: { id: jobId },
       data: { status: BulkJobStatus.FAILED, failureReason: reason, finishedAt: new Date() },
-    })
+    }),
+    )
   }
 
   private async recordError(
@@ -496,13 +518,16 @@ export class BulkProcessor {
   ): Promise<void> {
     // Inherited from the parent job so an error row can never end up in a
     // different tenant from the import that produced it.
-    const job = await this.db.raw.bulkJob.findUnique({
+    const job = await this.db.runAsPlatform('load a bulk job by id', (tx) =>
+      tx.bulkJob.findUnique({
       where: { id: jobId },
       select: { companyId: true },
-    })
+    }),
+    )
     if (!job) return
 
-    await this.db.raw.bulkJobError.create({
+    await this.db.runAsPlatform('record a bulk job row error', (tx) =>
+      tx.bulkJobError.create({
       data: {
         jobId,
         companyId: job.companyId,
@@ -512,7 +537,8 @@ export class BulkProcessor {
         message: issue.message,
         rawRow: issue.rawRow ?? undefined,
       },
-    })
+    }),
+    )
   }
 
   /**
@@ -527,7 +553,8 @@ export class BulkProcessor {
     counts: { create: number; update: number; error: number },
   ): Promise<void> {
     const changed = counts.create + counts.update
-    await this.db.raw.notification.create({
+    await this.db.runAsPlatform('notify a user that their bulk job finished', (tx) =>
+      tx.notification.create({
       data: {
         userId,
         event: 'ORDER_PLACED', // placeholder until BULK_IMPORT_FINISHED is added in Phase 7
@@ -540,7 +567,8 @@ export class BulkProcessor {
         payload: { type, ...counts },
         sentAt: new Date(),
       },
-    })
+    }),
+    )
   }
 }
 

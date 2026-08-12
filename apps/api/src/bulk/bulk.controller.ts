@@ -49,9 +49,9 @@ export class BulkController {
   ) {}
 
   @Get('types')
-  @ApiOperation({ summary: 'Bulk operations available today' })
-  availableTypes(): { types: BulkJobType[] } {
-    return { types: this.registry.availableTypes() }
+  @ApiOperation({ summary: 'Bulk operations this user can run' })
+  availableTypes(@CurrentUser() user: SessionUser): { types: BulkJobType[] } {
+    return { types: this.registry.availableTypesFor(user) }
   }
 
   @Get('templates/:type')
