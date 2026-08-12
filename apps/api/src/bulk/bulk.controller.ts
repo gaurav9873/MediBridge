@@ -168,6 +168,19 @@ export class BulkController {
     return this.bulk.remove(id, user)
   }
 
+  @Get('jobs/:id/rows')
+  @ApiOperation({ summary: 'What an import did, row by row, for reviewing in the app' })
+  async rows(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query('result') result: string | undefined,
+    @CurrentUser() user: SessionUser,
+  ): Promise<{
+    rows: Array<{ rowNumber: number; record: string; result: string; detail: string }>
+    truncated: boolean
+  }> {
+    return this.bulk.getRows(id, user, result)
+  }
+
   @Get('jobs/:id/errors.csv')
   @ApiOperation({ summary: 'Failed rows in template format, ready to fix and re-upload' })
   async errorFile(

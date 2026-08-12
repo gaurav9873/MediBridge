@@ -243,6 +243,24 @@ export class BulkProcessor {
       resumeFrom === 0 ? { processedRows: 0 } : {},
     )
 
+    /*
+     * Rows the validate pass already reported.
+     *
+     * The apply pass deliberately re-runs business validation — the data can
+     * change between preview and confirm — but it must not report the same bad
+     * row twice. Pass 1's shape failures are never re-recorded here either, so
+     * its records are the only account of them and clearing them would lose
+     * the count entirely. Both together were reporting "3 problems" for two
+     * broken rows.
+     */
+    const alreadyReported = new Set(
+      (
+        await this.db.runAsPlatform('read reported rows for a bulk job', (tx) =>
+          tx.bulkJobError.findMany({ where: { jobId }, select: { rowNumber: true } }),
+        )
+      ).map((row) => row.rowNumber),
+    )
+
     const counts = { create: 0, update: 0, skip: 0, error: 0 }
     const outcomes: Array<{ rowNumber: number; key: string; action: string; detail?: string }> = []
     const failedRows: Array<{ raw: Record<string, string>; message: string }> = []
@@ -288,10 +306,15 @@ export class BulkProcessor {
           )
           for (const issue of issues) {
             blocked.add(issue.rowNumber)
-            counts.error += 1
             const source = parsed.find((row) => row.rowNumber === issue.rowNumber)
-            await this.recordError(jobId, { ...issue, rawRow: source?.raw })
-            failedRows.push({ raw: source?.raw ?? {}, message: issue.message })
+            // Only new failures are recorded and counted; the rest are already
+            // in the report from the check the user confirmed against.
+            if (!alreadyReported.has(issue.rowNumber)) {
+              alreadyReported.add(issue.rowNumber)
+              counts.error += 1
+              await this.recordError(jobId, { ...issue, rawRow: source?.raw })
+              failedRows.push({ raw: source?.raw ?? {}, message: issue.message })
+            }
             outcomes.push({
               rowNumber: issue.rowNumber,
               key: source ? handler.naturalKey(source.data, scope) : String(issue.rowNumber),
@@ -367,6 +390,8 @@ export class BulkProcessor {
           createCount: counts.create,
           updateCount: counts.update,
           skipCount: counts.skip,
+          // Increment: pass 1's count stands, and this only adds failures it
+          // had not already reported.
           errorCount: { increment: counts.error },
           resultFileKey,
           ...(applyErrorFileKey ? { errorFileKey: applyErrorFileKey } : {}),

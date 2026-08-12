@@ -4,75 +4,58 @@ import { copy } from '@medibridge/copy'
 import type { BulkJobSummary } from '@medibridge/types'
 import {
   Button,
-  Card,
-  CardBody,
-  CardHeader,
-  type Column,
   ConfirmDialog,
   DataView,
   PageShell,
-  ResponsiveTable,
-  StatusBadge,
-  type StatusTone,
   StickyActionBar,
   notify,
 } from '@medibridge/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { CheckCircle2, Download, FileSpreadsheet, Play, Trash2, Upload } from 'lucide-react'
+import { FileSpreadsheet, Upload } from 'lucide-react'
 import * as React from 'react'
 import { BulkImportWizard } from '@/components/bulk/bulk-import-wizard'
+import { ImportJobCard } from '@/components/bulk/import-job-card'
+import { ImportSteps } from '@/components/bulk/import-steps'
 import { ApiClientError, api } from '@/lib/api-client'
 
-const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4100/api/v1'
-
 const c = copy.inventory.bulkUpload
-
-/** Status wording and tone in one place — icon and word, never colour alone. */
-const STATUS: Record<string, { label: string; tone: StatusTone }> = {
-  PENDING: { label: 'Waiting to start', tone: 'neutral' },
-  VALIDATING: { label: 'Checking your file', tone: 'info' },
-  AWAITING_CONFIRMATION: { label: 'Ready — needs your confirmation', tone: 'warning' },
-  IMPORTING: { label: 'Importing', tone: 'info' },
-  PAUSED: { label: 'Paused', tone: 'warning' },
-  COMPLETED: { label: 'Finished', tone: 'success' },
-  COMPLETED_WITH_ERRORS: { label: 'Finished with some problems', tone: 'warning' },
-  FAILED: { label: 'Could not be imported', tone: 'danger' },
-  CANCELLED: { label: 'Cancelled', tone: 'neutral' },
-}
-
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleString('en-IN', {
-    day: 'numeric',
-    month: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-}
 
 /**
  * A distributor's own bulk uploads.
  *
- * The same wizard the admin panel uses — it asks the server which operations
- * this user may run, so a seller is offered stock imports and updates while an
- * admin is offered the catalogue, with no branch in here deciding that.
+ * The same components the admin panel uses. What differs is only which
+ * operations the server offers this user, which the wizard asks it for —
+ * nothing in here decides that.
  */
 export default function DistributorImportsPage(): React.JSX.Element {
   const queryClient = useQueryClient()
   const [wizardOpen, setWizardOpen] = React.useState(false)
   const [removing, setRemoving] = React.useState<BulkJobSummary | null>(null)
 
+  const { data, isLoading, error, refetch } = useQuery({
+    queryKey: ['bulk', 'jobs'],
+    queryFn: () => api.get<{ items: BulkJobSummary[] }>('/bulk/jobs'),
+    refetchInterval: 5_000,
+  })
+
+  const refresh = (): void => {
+    void queryClient.invalidateQueries({ queryKey: ['bulk'] })
+    // New stock means the inventory screens are stale too.
+    void queryClient.invalidateQueries({ queryKey: ['inventory'] })
+  }
+
   const act = useMutation({
     mutationFn: ({ id, action }: { id: string; action: string }) =>
       api.post(`/bulk/jobs/${id}/${action}`),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['bulk', 'jobs'] }),
-    onError: (mutationError) =>
-      notify.error(mutationError instanceof ApiClientError ? mutationError.message : undefined),
+    onSuccess: refresh,
+    onError: (actionError) =>
+      notify.error(actionError instanceof ApiClientError ? actionError.message : undefined),
   })
 
   const remove = useMutation({
     mutationFn: (id: string) => api.delete(`/bulk/jobs/${id}`),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['bulk', 'jobs'] })
+      refresh()
       notify.success(c.removed)
       setRemoving(null)
     },
@@ -82,150 +65,39 @@ export default function DistributorImportsPage(): React.JSX.Element {
     },
   })
 
-  const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ['bulk', 'jobs'],
-    queryFn: () => api.get<{ items: BulkJobSummary[] }>('/bulk/jobs'),
-    // A job runs in the background, so the list has to notice on its own.
-    refetchInterval: 5_000,
-  })
-
-  const columns: ReadonlyArray<Column<BulkJobSummary>> = [
-    {
-      key: 'type',
-      header: 'Upload',
-      mobile: 'primary',
-      render: (job) => (
-        <div className="flex flex-col gap-0.5">
-          <span className="font-medium text-content-primary">
-            {c.types[job.type as keyof typeof c.types]?.label ?? job.type}
-          </span>
-          <span className="text-sm text-content-muted">{job.fileName}</span>
-        </div>
-      ),
-    },
-    {
-      key: 'status',
-      header: 'Status',
-      mobile: 'secondary',
-      render: (job) => (
-        <StatusBadge
-          label={STATUS[job.status]?.label ?? job.status}
-          tone={STATUS[job.status]?.tone ?? 'neutral'}
-        />
-      ),
-    },
-    {
-      key: 'rows',
-      header: 'Rows',
-      align: 'right',
-      render: (job) => <span className="tabular-nums">{job.totalRows ?? '—'}</span>,
-    },
-    {
-      key: 'created',
-      header: 'Added',
-      align: 'right',
-      render: (job) => <span className="tabular-nums">{job.createCount}</span>,
-    },
-    {
-      key: 'failed',
-      header: 'Problems',
-      align: 'right',
-      render: (job) =>
-        job.errorCount > 0 ? (
-          <span className="tabular-nums font-medium text-danger-700">{job.errorCount}</span>
-        ) : (
-          <span className="text-content-muted">—</span>
-        ),
-    },
-    {
-      key: 'when',
-      header: 'When',
-      mobile: 'hidden',
-      render: (job) => <span className="text-sm">{formatDate(job.queuedAt)}</span>,
-    },
-    {
-      key: 'actions',
-      header: '',
-      render: (job) => (
-        <div className="flex flex-wrap justify-end gap-2">
-          {job.canConfirm && (
-            <Button
-              size="md"
-              icon={<CheckCircle2 />}
-              onClick={() => act.mutate({ id: job.id, action: 'confirm' })}
-            >
-              {c.confirmImport}
-            </Button>
-          )}
-          {job.canResume && (
-            <Button
-              size="md"
-              variant="secondary"
-              icon={<Play />}
-              onClick={() => act.mutate({ id: job.id, action: 'resume' })}
-            >
-              {job.status === 'FAILED' ? c.importTheRest : c.resume}
-            </Button>
-          )}
-          {job.hasErrorFile && (
-            <Button asChild variant="secondary" size="md">
-              <a href={`${API}/bulk/jobs/${job.id}/errors.csv`} download>
-                <Download className="size-5" aria-hidden /> {c.failedRows}
-              </a>
-            </Button>
-          )}
-          {job.hasResultFile && (
-            <Button asChild variant="ghost" size="md">
-              <a href={`${API}/bulk/jobs/${job.id}/result.csv`} download>
-                <Download className="size-5" aria-hidden /> {c.fullReport}
-              </a>
-            </Button>
-          )}
-          {job.canRemove && (
-            <Button
-              variant="ghost"
-              size="md"
-              icon={<Trash2 />}
-              aria-label={`${c.remove} ${job.fileName}`}
-              onClick={() => setRemoving(job)}
-            >
-              {c.remove}
-            </Button>
-          )}
-        </div>
-      ),
-    },
-  ]
-
   return (
     <PageShell
       page={c.distributorPage}
       help={c.distributorHelp}
       primaryAction={{ label: c.page.title, onClick: () => setWizardOpen(true) }}
     >
-      <Card>
-        <CardHeader title={c.historyHeading} />
-        <CardBody>
-          <DataView
-            data={data?.items}
-            isLoading={isLoading}
-            error={error instanceof ApiClientError ? error.message : (error?.message ?? null)}
-            emptyState={c.historyEmpty}
-            emptyIcon={<FileSpreadsheet />}
-            onEmptyAction={() => setWizardOpen(true)}
-            onRetry={() => void refetch()}
-          >
-            {(jobs) => (
-              <ResponsiveTable
-                columns={columns}
-                rows={jobs}
-                rowKey={(job) => job.id}
-                caption={c.historyHeading}
+      <ImportSteps />
+
+      <h2 className="text-lg font-semibold text-content-primary">{c.historyHeading}</h2>
+
+      <DataView
+        data={data?.items}
+        isLoading={isLoading}
+        error={error instanceof ApiClientError ? error.message : (error?.message ?? null)}
+        emptyState={c.historyEmpty}
+        emptyIcon={<FileSpreadsheet />}
+        onEmptyAction={() => setWizardOpen(true)}
+        onRetry={() => void refetch()}
+      >
+        {(jobs) => (
+          <div className="flex flex-col gap-3">
+            {jobs.map((job) => (
+              <ImportJobCard
+                key={job.id}
+                job={job}
+                busy={act.isPending}
+                onAction={(action) => act.mutate({ id: job.id, action })}
+                onRemove={() => setRemoving(job)}
               />
-            )}
-          </DataView>
-        </CardBody>
-      </Card>
+            ))}
+          </div>
+        )}
+      </DataView>
 
       <StickyActionBar>
         <Button size="lg" fullWidth icon={<Upload />} onClick={() => setWizardOpen(true)}>
@@ -244,14 +116,7 @@ export default function DistributorImportsPage(): React.JSX.Element {
         onConfirm={() => removing && remove.mutate(removing.id)}
       />
 
-      <BulkImportWizard
-        open={wizardOpen}
-        onOpenChange={setWizardOpen}
-        onFinished={() => {
-          void queryClient.invalidateQueries({ queryKey: ['bulk', 'jobs'] })
-          void queryClient.invalidateQueries({ queryKey: ['inventory'] })
-        }}
-      />
+      <BulkImportWizard open={wizardOpen} onOpenChange={setWizardOpen} onFinished={refresh} />
     </PageShell>
   )
 }

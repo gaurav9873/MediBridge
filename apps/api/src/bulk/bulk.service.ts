@@ -299,6 +299,57 @@ export class BulkService {
     return { removed: true }
   }
 
+  /**
+   * What an import actually did, row by row.
+   *
+   * Read back from the result file rather than a table. The outcomes are not
+   * persisted as rows on purpose — storing 50,000 of them to show 50 is waste
+   * — but the CSV is already written and is the same thing, so parsing it back
+   * gives an in-app review without a new table to keep in step.
+   *
+   * Capped, because this exists to let somebody check what happened, not to
+   * page through a 50,000-row file in a browser. The full list is the download.
+   */
+  async getRows(
+    jobId: string,
+    user: SessionUser,
+    filter?: string,
+  ): Promise<{ rows: Array<{ rowNumber: number; record: string; result: string; detail: string }>; truncated: boolean }> {
+    const job = await this.requireJob(jobId, user)
+    if (!job.resultFileKey || !(await this.storage.exists(job.resultFileKey))) {
+      return { rows: [], truncated: false }
+    }
+
+    const chunks: Buffer[] = []
+    for await (const chunk of this.storage.createReadStream(job.resultFileKey)) {
+      chunks.push(chunk as Buffer)
+    }
+    const lines = Buffer.concat(chunks).toString('utf8').split(/\r?\n/).filter(Boolean)
+
+    const rows: Array<{ rowNumber: number; record: string; result: string; detail: string }> = []
+    let truncated = false
+
+    // Skip the header. The writer emits a fixed four-column shape.
+    for (const line of lines.slice(1)) {
+      const cells = splitCsvLine(line)
+      const result = (cells[2] ?? '').trim()
+      if (filter && result !== filter) continue
+
+      if (rows.length >= BULK_LIMITS.previewSampleSize * 8) {
+        truncated = true
+        break
+      }
+      rows.push({
+        rowNumber: Number(cells[0] ?? 0),
+        record: cells[1] ?? '',
+        result,
+        detail: cells[3] ?? '',
+      })
+    }
+
+    return { rows, truncated }
+  }
+
   async list(query: BulkJobListQuery, user: SessionUser): Promise<Paginated<BulkJobSummary>> {
     const where = {
       // Admins see everything; everyone else sees only their own imports.
@@ -456,4 +507,34 @@ function toSummary(job: {
     canCancel: !TERMINAL_BULK_STATUSES.includes(status),
     canRemove: !ACTIVE_BULK_STATUSES.includes(status),
   }
+}
+
+/**
+ * Minimal CSV line split that respects quoted cells.
+ *
+ * The reports are written by our own formatter, so the only quoting to handle
+ * is the one it produces: double quotes around a cell, doubled inside it.
+ */
+function splitCsvLine(line: string): string[] {
+  const cells: string[] = []
+  let current = ''
+  let inQuotes = false
+
+  for (let i = 0; i < line.length; i += 1) {
+    const char = line[i]
+    if (inQuotes) {
+      if (char === '"') {
+        if (line[i + 1] === '"') {
+          current += '"'
+          i += 1
+        } else inQuotes = false
+      } else current += char
+    } else if (char === '"') inQuotes = true
+    else if (char === ',') {
+      cells.push(current)
+      current = ''
+    } else current += char
+  }
+  cells.push(current)
+  return cells
 }

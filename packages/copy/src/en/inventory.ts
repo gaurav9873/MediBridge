@@ -373,6 +373,37 @@ export const inventory = {
     failedRows: 'Failed rows',
     fullReport: 'Full report',
     remove: 'Remove',
+    /** The whole flow, said once, so nobody has to infer it from a status chip. */
+    steps: [
+      { title: 'Download the template', body: 'It already has the right column headings and an example row.' },
+      { title: 'Fill in your rows', body: 'Delete the two grey guidance rows first, then add one row per record.' },
+      { title: 'Upload it', body: 'We read every row and check it against the rules. Nothing is saved yet.' },
+      { title: 'Check what will happen', body: 'You see how many rows are new, changed or have a problem, before deciding.' },
+      { title: 'Confirm', body: 'Only then is anything written. Good rows always go in; failed rows are listed for you to fix.' },
+    ],
+    stepsHeading: 'How an import works',
+    /** Per-job detail. */
+    detail: {
+      show: 'Details',
+      hide: 'Hide details',
+      whatHappened: 'What happened',
+      problems: 'Rows with problems',
+      problemsNote: 'Fix these rows and upload the file again — the good rows are already in.',
+      imported: 'What was imported',
+      importedNote: 'The first rows this import created or changed.',
+      showImported: 'Review imported rows',
+      noneImported: 'This import did not create or change anything.',
+      truncated: 'Showing the first rows only. Download the full report for everything.',
+      rowNumber: (n: number) => `Row ${n}`,
+      nothingYet: 'Nothing to show yet — this import has not finished checking.',
+    },
+    counts: {
+      created: (n: number) => (n === 1 ? '1 new' : `${n} new`),
+      updated: (n: number) => (n === 1 ? '1 updated' : `${n} updated`),
+      skipped: (n: number) => (n === 1 ? '1 unchanged' : `${n} unchanged`),
+      failed: (n: number) => (n === 1 ? '1 problem' : `${n} problems`),
+      nothing: 'Nothing yet',
+    },
     /**
      * The most important words on this screen.
      *
