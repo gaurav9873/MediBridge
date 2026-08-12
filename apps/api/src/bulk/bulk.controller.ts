@@ -1,5 +1,6 @@
 import {
   Controller,
+  Delete,
   Get,
   HttpCode,
   HttpStatus,
@@ -155,6 +156,16 @@ export class BulkController {
     @CurrentUser() user: SessionUser,
   ): Promise<BulkJobSummary> {
     return this.bulk.cancel(id, user)
+  }
+
+  @Delete('jobs/:id')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Remove a finished import from the history' })
+  async remove(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: SessionUser,
+  ): Promise<{ removed: true }> {
+    return this.bulk.remove(id, user)
   }
 
   @Get('jobs/:id/errors.csv')

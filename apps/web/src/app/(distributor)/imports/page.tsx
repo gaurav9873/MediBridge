@@ -8,6 +8,7 @@ import {
   CardBody,
   CardHeader,
   type Column,
+  ConfirmDialog,
   DataView,
   PageShell,
   ResponsiveTable,
@@ -17,7 +18,7 @@ import {
   notify,
 } from '@medibridge/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { CheckCircle2, Download, FileSpreadsheet, Play, Upload } from 'lucide-react'
+import { CheckCircle2, Download, FileSpreadsheet, Play, Trash2, Upload } from 'lucide-react'
 import * as React from 'react'
 import { BulkImportWizard } from '@/components/bulk/bulk-import-wizard'
 import { ApiClientError, api } from '@/lib/api-client'
@@ -58,6 +59,7 @@ function formatDate(iso: string): string {
 export default function DistributorImportsPage(): React.JSX.Element {
   const queryClient = useQueryClient()
   const [wizardOpen, setWizardOpen] = React.useState(false)
+  const [removing, setRemoving] = React.useState<BulkJobSummary | null>(null)
 
   const act = useMutation({
     mutationFn: ({ id, action }: { id: string; action: string }) =>
@@ -65,6 +67,19 @@ export default function DistributorImportsPage(): React.JSX.Element {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['bulk', 'jobs'] }),
     onError: (mutationError) =>
       notify.error(mutationError instanceof ApiClientError ? mutationError.message : undefined),
+  })
+
+  const remove = useMutation({
+    mutationFn: (id: string) => api.delete(`/bulk/jobs/${id}`),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['bulk', 'jobs'] })
+      notify.success(c.removed)
+      setRemoving(null)
+    },
+    onError: (removeError) => {
+      setRemoving(null)
+      notify.error(removeError instanceof ApiClientError ? removeError.message : undefined)
+    },
   })
 
   const { data, isLoading, error, refetch } = useQuery({
@@ -166,6 +181,19 @@ export default function DistributorImportsPage(): React.JSX.Element {
               </a>
             </Button>
           )}
+          {/* Only a finished import can be removed — a running one would leave
+              the worker writing progress to a row that no longer exists. */}
+          {!job.canCancel && (
+            <Button
+              variant="ghost"
+              size="md"
+              icon={<Trash2 />}
+              aria-label={`${c.remove} ${job.fileName}`}
+              onClick={() => setRemoving(job)}
+            >
+              {c.remove}
+            </Button>
+          )}
         </div>
       ),
     },
@@ -206,6 +234,17 @@ export default function DistributorImportsPage(): React.JSX.Element {
           {c.page.title}
         </Button>
       </StickyActionBar>
+
+      <ConfirmDialog
+        open={removing !== null}
+        onOpenChange={(open) => !open && setRemoving(null)}
+        title={c.confirmRemove.title}
+        body={c.confirmRemove.body}
+        confirmLabel={c.confirmRemove.confirmLabel}
+        tone="danger"
+        loading={remove.isPending}
+        onConfirm={() => removing && remove.mutate(removing.id)}
+      />
 
       <BulkImportWizard
         open={wizardOpen}

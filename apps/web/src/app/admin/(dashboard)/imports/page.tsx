@@ -1,5 +1,6 @@
 'use client'
 
+import { copy } from '@medibridge/copy'
 import type { BulkJobSummary } from '@medibridge/types'
 import {
   Alert,
@@ -8,6 +9,7 @@ import {
   CardBody,
   CardHeader,
   type Column,
+  ConfirmDialog,
   DataView,
   PageShell,
   ResponsiveTable,
@@ -22,6 +24,7 @@ import {
   FileSpreadsheet,
   Pause,
   Play,
+  Trash2,
   Upload,
   X,
   XCircle,
@@ -65,6 +68,20 @@ const TYPE_LABELS: Record<string, string> = {
 export default function ImportsPage(): React.JSX.Element {
   const queryClient = useQueryClient()
   const [wizardOpen, setWizardOpen] = React.useState(false)
+  const [removing, setRemoving] = React.useState<BulkJobSummary | null>(null)
+
+  const remove = useMutation({
+    mutationFn: (id: string) => api.delete(`/bulk/jobs/${id}`),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['bulk', 'jobs'] })
+      notify.success(copy.inventory.bulkUpload.removed)
+      setRemoving(null)
+    },
+    onError: (removeError) => {
+      setRemoving(null)
+      notify.error(removeError instanceof ApiClientError ? removeError.message : undefined)
+    },
+  })
 
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['bulk', 'jobs'],
@@ -219,7 +236,7 @@ export default function ImportsPage(): React.JSX.Element {
             rows={jobs}
             rowKey={(job) => job.id}
             caption="Import history"
-            mobileFooter={(job) => <JobActions job={job} act={act} />}
+            mobileFooter={(job) => <JobActions job={job} act={act} onRemove={setRemoving} />}
           />
         )}
       </DataView>
@@ -241,7 +258,7 @@ export default function ImportsPage(): React.JSX.Element {
                         : STATUS[job.status]?.label}
                     </span>
                   </div>
-                  <JobActions job={job} act={act} />
+                  <JobActions job={job} act={act} onRemove={setRemoving} />
                 </CardBody>
               </Card>
             ))}
@@ -253,6 +270,17 @@ export default function ImportsPage(): React.JSX.Element {
           {data.items.find((job) => job.status === 'FAILED')?.failureReason}
         </Alert>
       )}
+
+      <ConfirmDialog
+        open={removing !== null}
+        onOpenChange={(open) => !open && setRemoving(null)}
+        title={copy.inventory.bulkUpload.confirmRemove.title}
+        body={copy.inventory.bulkUpload.confirmRemove.body}
+        confirmLabel={copy.inventory.bulkUpload.confirmRemove.confirmLabel}
+        tone="danger"
+        loading={remove.isPending}
+        onConfirm={() => removing && remove.mutate(removing.id)}
+      />
 
       <BulkImportWizard
         open={wizardOpen}
@@ -266,9 +294,11 @@ export default function ImportsPage(): React.JSX.Element {
 function JobActions({
   job,
   act,
+  onRemove,
 }: {
   job: BulkJobSummary
   act: { mutate: (v: { id: string; action: string }) => void; isPending: boolean }
+  onRemove: (job: BulkJobSummary) => void
 }): React.JSX.Element {
   return (
     <div className="flex flex-wrap gap-2">
@@ -315,6 +345,19 @@ function JobActions({
           <a href={`${API}/bulk/jobs/${job.id}/result.csv`} download>
             <Download className="size-5" aria-hidden /> Full report
           </a>
+        </Button>
+      )}
+      {/* Only a finished import can be removed — a running one would leave the
+          worker writing progress to a row that no longer exists. */}
+      {!job.canCancel && (
+        <Button
+          variant="ghost"
+          size="md"
+          icon={<Trash2 />}
+          aria-label={`${copy.inventory.bulkUpload.remove} ${job.fileName}`}
+          onClick={() => onRemove(job)}
+        >
+          {copy.inventory.bulkUpload.remove}
         </Button>
       )}
       {job.canCancel && !job.canConfirm && (

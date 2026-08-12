@@ -231,6 +231,65 @@ export class BulkService {
     return this.getJob(jobId, user)
   }
 
+  /**
+   * Removes an import from the history.
+   *
+   * Deletes the RECORD, not the WORK. Medicines added or stock updated by this
+   * job stay exactly as they are — an import is not a transaction you can roll
+   * back, and pretending otherwise would be the most dangerous button in the
+   * product. The confirmation says so in as many words.
+   *
+   * Only a finished job can go. A running one would leave the worker writing
+   * progress to a row that no longer exists, so those must be cancelled first.
+   *
+   * The three stored files go with it — source, failed rows and full report.
+   * Leaving them behind would mean a bucket that only ever grows, holding
+   * files nothing references.
+   */
+  async remove(jobId: string, user: SessionUser): Promise<{ removed: true }> {
+    const job = await this.requireJob(jobId, user)
+
+    if (!TERMINAL_BULK_STATUSES.includes(job.status as never)) {
+      throw new AppException(ApiErrorCode.INVALID_STATUS_TRANSITION, {
+        fields: [
+          {
+            field: 'id',
+            message: 'This import is still running. Cancel it first, then remove it.',
+          },
+        ],
+      })
+    }
+
+    for (const key of [job.fileKey, job.errorFileKey, job.resultFileKey]) {
+      // A missing file must not block the delete: the row is the thing being
+      // removed, and a storage gap is not the user's problem to solve.
+      if (key && key !== 'pending') await this.storage.remove(key).catch(() => undefined)
+    }
+
+    await this.db.run(async (tx) => {
+      // bulk_job_errors cascade on the foreign key, so the rows go with it.
+      await tx.bulkJob.delete({ where: { id: jobId } })
+      await tx.auditLog.create({
+        data: {
+          companyId: job.companyId,
+          actorId: user.id,
+          action: 'DELETE_BULK_JOB',
+          entityType: 'BulkJob',
+          entityId: jobId,
+          before: {
+            type: job.type,
+            fileName: job.fileName,
+            status: job.status,
+            createCount: job.createCount,
+          } as never,
+        },
+      })
+    })
+
+    this.logger.log(`Bulk job removed from history: ${jobId}`)
+    return { removed: true }
+  }
+
   async list(query: BulkJobListQuery, user: SessionUser): Promise<Paginated<BulkJobSummary>> {
     const where = {
       // Admins see everything; everyone else sees only their own imports.

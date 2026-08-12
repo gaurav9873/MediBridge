@@ -372,6 +372,21 @@ export const inventory = {
     importTheRest: 'Import the rest',
     failedRows: 'Failed rows',
     fullReport: 'Full report',
+    remove: 'Remove',
+    /**
+     * The most important words on this screen.
+     *
+     * Somebody removing a failed import will reasonably assume it undoes the
+     * import. It does not — nothing here can. Saying so plainly is the whole
+     * job of this confirmation.
+     */
+    confirmRemove: {
+      title: 'Remove this upload from the list?',
+      body: 'This only clears the record and its reports. Anything the upload already added or changed stays exactly as it is — removing it does not undo the import.',
+      confirmLabel: 'Remove it',
+    },
+    removed: 'Upload removed from the list.',
+    removeBlocked: 'This import is still running. Cancel it first, then remove it.',
     historyEmpty: {
       title: 'You have not uploaded anything yet',
       body: 'Upload a spreadsheet to add or update a lot of stock at once. We check every row and show you what will happen before anything is saved.',
