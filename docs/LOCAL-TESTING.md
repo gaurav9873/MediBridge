@@ -527,13 +527,12 @@ docker compose exec postgres psql -U medibridge -d medibridge -t -c \
 
 Do not report these as bugs:
 
-- **No ordering.** Cart, checkout, orders and payments are Phase 3. A retailer can search but not buy.
 - **No ordering or search screens.** Medicine master (3.1), inventory (3.2), warehouse transfers (3.3) and bulk uploads (3.4) are built; search is 3.5 and the rest follows.
 - **The bulk worker must be running** for any upload to progress. It is a separate process: `npm run worker -w @medibridge/api`.
 - **Inventory has no bulk edit and no stock history screen.** See [INVENTORY.md](INVENTORY.md#known-limitations) for that module's full list.
 - **Medicine list sorting is fixed** at name A–Z, and page size at 25. The API supports neither a sort parameter nor a page-size control yet. See [MEDICINE-MASTER.md](MEDICINE-MASTER.md#known-limitations) for the full list of that module's limitations.
 - **No SMS or email actually sends.** Codes appear on screen; notification preferences are stored but nothing dispatches yet.
-- **No super admin account.** `9000000001` is a tenant admin, not a platform owner.
+- **No separate super-admin *portal*.** `9000000001` now holds the `PLATFORM_OWNER` role with the four `platform.*` keys, which is what gates the global catalogue — but the platform team and a company admin still share one `/admin` shell.
 - **The web app ignores tenant branding.** The endpoint works; the UI does not use it yet.
 - **No CI.** By your decision — deployment work is deferred.
 - **No audit log viewer.** Every change is recorded in `audit_logs` with who, what and the before/after — but there is no screen for it. Read it with `npm run db:studio`.
