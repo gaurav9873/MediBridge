@@ -373,6 +373,18 @@ export const inventory = {
     failedRows: 'Failed rows',
     fullReport: 'Full report',
     remove: 'Remove',
+    /**
+     * Shown when the same bytes have been imported before.
+     *
+     * Deliberately a warning and not a block. Re-importing a corrected sheet
+     * under the same name is normal, and so is re-running one on purpose —
+     * what is not fine is doing it by accident and not being told.
+     */
+    alreadyImported: {
+      title: 'You have imported this exact file before',
+      body: (when: string, created: number, updated: number) =>
+        `The same file was imported on ${when}, adding ${created} and updating ${updated}. Importing it again is safe — records are matched, not duplicated — but rows that have not changed since will simply be skipped.`,
+    },
     /** The whole flow, said once, so nobody has to infer it from a status chip. */
     steps: [
       { title: 'Download the template', body: 'It already has the right column headings and an example row.' },

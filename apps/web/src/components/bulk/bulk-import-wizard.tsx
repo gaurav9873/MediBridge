@@ -91,6 +91,24 @@ export function BulkImportWizard({
     },
   })
 
+  /**
+   * Have we seen this exact file before?
+   *
+   * Asked once the check is done, so the answer sits next to the decision it
+   * should inform rather than appearing after the import has run.
+   */
+  const { data: previousUpload } = useQuery({
+    queryKey: ['bulk', 'previous', jobId],
+    queryFn: () =>
+      api.get<{
+        importedAt: string
+        fileName: string
+        createCount: number
+        updateCount: number
+      } | null>(`/bulk/jobs/${jobId}/previous-upload`),
+    enabled: Boolean(jobId) && job?.status === 'AWAITING_CONFIRMATION',
+  })
+
   const { data: preview } = useQuery({
     queryKey: ['bulk', 'preview', jobId],
     queryFn: () => api.get<{ issues: RowIssue[] }>(`/bulk/jobs/${jobId}/preview`),
@@ -377,6 +395,16 @@ export function BulkImportWizard({
                           </Button>
                         )}
                       </div>
+                    )}
+
+                    {previousUpload && (
+                      <Alert tone="warning" title={copy.inventory.bulkUpload.alreadyImported.title}>
+                        {copy.inventory.bulkUpload.alreadyImported.body(
+                          new Date(previousUpload.importedAt).toLocaleString('en-IN'),
+                          previousUpload.createCount,
+                          previousUpload.updateCount,
+                        )}
+                      </Alert>
                     )}
 
                     <div className="flex flex-col gap-2 sm:flex-row-reverse">

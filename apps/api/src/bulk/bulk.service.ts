@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common'
+import { createHash } from 'node:crypto'
 import {
   ACTIVE_BULK_STATUSES,
   ALLOWED_BULK_MIME_TYPES,
@@ -82,6 +83,17 @@ export class BulkService {
       })
     }
 
+    /*
+     * Recognise a file we have seen before.
+     *
+     * Hashing the bytes is the only way to answer "is this the same file?" —
+     * a name is not evidence, and neither is a size. It does NOT block the
+     * upload: re-importing a corrected sheet under the same name is normal,
+     * and so is deliberately re-running one. It records the match so the
+     * wizard can say "you already imported this" before anything is confirmed.
+     */
+    const fileHash = createHash('sha256').update(file.buffer).digest('hex')
+
     const warehouseId = await this.resolveWarehouseScope(user, scope.role)
 
     const job = await this.db.run((tx) =>
@@ -98,6 +110,7 @@ export class BulkService {
           fileKey: 'pending',
           fileName: file.originalname.slice(0, 255),
           sizeBytes: file.size,
+          fileHash,
           options: { dryRun: options.dryRun },
         },
       }),
@@ -115,6 +128,42 @@ export class BulkService {
     await this.queue.enqueue({ jobId: job.id, pass: 'validate' })
 
     return this.getJob(job.id, user)
+  }
+
+  /**
+   * A previous import of the exact same bytes, if there is one.
+   *
+   * Scoped to this user's own history: two people uploading the same
+   * price list is not a mistake worth warning either of them about.
+   */
+  async findPreviousUpload(
+    jobId: string,
+    user: SessionUser,
+  ): Promise<{ importedAt: string; fileName: string; createCount: number; updateCount: number } | null> {
+    const job = await this.requireJob(jobId, user)
+    if (!job.fileHash) return null
+
+    const previous = await this.db.run((tx) =>
+      tx.bulkJob.findFirst({
+        where: {
+          id: { not: jobId },
+          createdById: user.id,
+          fileHash: job.fileHash,
+          // Only a run that actually wrote something is worth mentioning.
+          status: { in: [BulkJobStatus.COMPLETED, BulkJobStatus.COMPLETED_WITH_ERRORS] },
+        },
+        orderBy: { queuedAt: 'desc' },
+        select: { queuedAt: true, fileName: true, createCount: true, updateCount: true },
+      }),
+    )
+    if (!previous) return null
+
+    return {
+      importedAt: previous.queuedAt.toISOString(),
+      fileName: previous.fileName,
+      createCount: previous.createCount,
+      updateCount: previous.updateCount,
+    }
   }
 
   async getJob(jobId: string, user: SessionUser): Promise<BulkJobSummary> {

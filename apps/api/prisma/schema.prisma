@@ -1126,6 +1126,10 @@ model BulkJob {
   fileKey   String @db.VarChar(500)
   fileName  String @db.VarChar(255)
   sizeBytes Int
+  /// SHA-256 of the uploaded bytes, so a repeat of the same file is
+  /// recognisable as the same file whatever it was named. Nullable because
+  /// jobs imported before this existed have no hash to backfill from.
+  fileHash  String? @db.VarChar(64)
 
   /// Null until the file has been counted during validation.
   totalRows     Int?
@@ -1161,6 +1165,8 @@ model BulkJob {
   @@index([createdById, queuedAt])
   @@index([type, status])
   @@index([status, queuedAt])
+  /// Finding a previous upload of the same bytes, for the repeat warning.
+  @@index([createdById, fileHash])
   @@map("bulk_jobs")
 }
 

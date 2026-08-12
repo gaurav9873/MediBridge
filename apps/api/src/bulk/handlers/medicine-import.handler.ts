@@ -5,6 +5,7 @@ import {
   BulkJobType,
   type ColumnSpec,
   DrugSchedule,
+  blankAsAbsent,
   MedicineForm,
   type RowIssue,
   type RowPlan,
@@ -228,14 +229,27 @@ export class MedicineImportHandler implements BulkHandler<MedicineRow> {
     const existing = await this.findExisting(rows, scope, tx)
 
     return rows.map((row) => {
-      const key = this.naturalKey(row.data)
+      const match = existing.get(this.naturalKey(row.data))
+      const label = `${row.data.name} (${row.data.brand})`
+
+      if (!match) {
+        return { rowNumber: row.rowNumber, action: 'CREATE', key: label, describe: 'New medicine' }
+      }
+
+      /*
+       * Re-uploading the same file must not report work that did not happen.
+       *
+       * Without this, importing an unchanged sheet a second time claimed every
+       * row as "updated" — and wrote every one of them, bumping updatedAt and
+       * filling the audit log for nothing. A row that matches in every field
+       * is a SKIP, which is what the stock-update handler has always done.
+       */
+      const changes = describeChanges(match, row.data)
       return {
         rowNumber: row.rowNumber,
-        action: existing.has(key) ? 'UPDATE' : 'CREATE',
-        key: `${row.data.name} (${row.data.brand})`,
-        describe: existing.has(key)
-          ? 'Already in the catalogue — details will be updated'
-          : 'New medicine',
+        action: changes.length > 0 ? 'UPDATE' : 'SKIP',
+        key: label,
+        describe: changes.length > 0 ? changes.join(', ') : 'Already up to date',
       }
     })
   }
@@ -248,6 +262,7 @@ export class MedicineImportHandler implements BulkHandler<MedicineRow> {
     const existing = await this.findExisting(rows, scope, tx)
     let created = 0
     let updated = 0
+    let skipped = 0
 
     for (const row of rows) {
       const key = this.naturalKey(row.data)
@@ -265,9 +280,14 @@ export class MedicineImportHandler implements BulkHandler<MedicineRow> {
         isPrescriptionRequired: row.data.isPrescriptionRequired ?? false,
       }
 
-      const existingId = existing.get(key)
-      if (existingId) {
-        await tx.medicine.update({ where: { id: existingId }, data })
+      const match = existing.get(key)
+      if (match) {
+        // Nothing to write when nothing differs.
+        if (describeChanges(match, row.data).length === 0) {
+          skipped += 1
+          continue
+        }
+        await tx.medicine.update({ where: { id: match.id }, data })
         updated += 1
       } else {
         await tx.medicine.create({ data: { ...data, createdById: scope.userId } })
@@ -275,7 +295,7 @@ export class MedicineImportHandler implements BulkHandler<MedicineRow> {
       }
     }
 
-    return { created, updated, skipped: 0, issues: [] }
+    return { created, updated, skipped, issues: [] }
   }
 
   /**
@@ -288,7 +308,7 @@ export class MedicineImportHandler implements BulkHandler<MedicineRow> {
     rows: ParsedRow<MedicineRow>[],
     _scope: BulkScope,
     tx: PrismaTx,
-  ): Promise<Map<string, string>> {
+  ): Promise<Map<string, ExistingMedicine>> {
     const names = [...new Set(rows.map((row) => row.data.name))]
     const brands = [...new Set(rows.map((row) => row.data.brand))]
 
@@ -297,7 +317,22 @@ export class MedicineImportHandler implements BulkHandler<MedicineRow> {
         name: { in: names, mode: 'insensitive' },
         brand: { in: brands, mode: 'insensitive' },
       },
-      select: { id: true, name: true, brand: true, strength: true, packSize: true },
+      // Every field the import can write, so a row that changes nothing can be
+      // recognised as changing nothing.
+      select: {
+        id: true,
+        name: true,
+        brand: true,
+        strength: true,
+        packSize: true,
+        composition: true,
+        form: true,
+        manufacturer: true,
+        hsnCode: true,
+        gstRate: true,
+        schedule: true,
+        isPrescriptionRequired: true,
+      },
     })
 
     return new Map(
@@ -305,8 +340,52 @@ export class MedicineImportHandler implements BulkHandler<MedicineRow> {
         [medicine.name, medicine.brand, medicine.strength ?? '', medicine.packSize ?? '']
           .map((part) => part.trim().toLowerCase())
           .join('|'),
-        medicine.id,
+        medicine,
       ]),
     )
   }
+}
+
+/** Every field this import can write, as stored. */
+interface ExistingMedicine {
+  id: string
+  name: string
+  brand: string
+  composition: string
+  form: string
+  strength: string | null
+  packSize: string | null
+  manufacturer: string | null
+  hsnCode: string
+  gstRate: number
+  schedule: string
+  isPrescriptionRequired: boolean
+}
+
+/**
+ * What a row would actually change about a medicine already on the list.
+ *
+ * Empty means the row and the record agree, which makes it a SKIP rather than
+ * an update — the difference between "we re-saved 50 rows" and "nothing to do".
+ *
+ * Optional text is compared through blankAsAbsent so a missing strength and an
+ * empty one are the same absence, exactly as the identity key treats them.
+ */
+function describeChanges(existing: ExistingMedicine, row: MedicineRow): string[] {
+  const changes: string[] = []
+  const same = (a: string | null | undefined, b: string | null | undefined): boolean =>
+    blankAsAbsent(a) === blankAsAbsent(b)
+
+  if (!same(existing.composition, row.composition)) changes.push('salt')
+  if (existing.form !== row.form) changes.push('type')
+  if (!same(existing.strength, row.strength)) changes.push('strength')
+  if (!same(existing.packSize, row.packSize)) changes.push('pack size')
+  if (!same(existing.manufacturer, row.manufacturer)) changes.push('manufacturer')
+  if (!same(existing.hsnCode, row.hsnCode)) changes.push('HSN code')
+  if (existing.gstRate !== row.gstRate) changes.push('GST rate')
+  if (existing.schedule !== (row.schedule ?? DrugSchedule.NONE)) changes.push('schedule')
+  if (existing.isPrescriptionRequired !== (row.isPrescriptionRequired ?? false)) {
+    changes.push('prescription requirement')
+  }
+  return changes
 }

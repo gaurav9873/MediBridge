@@ -168,6 +168,20 @@ export class BulkController {
     return this.bulk.remove(id, user)
   }
 
+  @Get('jobs/:id/previous-upload')
+  @ApiOperation({ summary: 'A previous import of the same file, if there was one' })
+  async previousUpload(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: SessionUser,
+  ): Promise<{
+    importedAt: string
+    fileName: string
+    createCount: number
+    updateCount: number
+  } | null> {
+    return this.bulk.findPreviousUpload(id, user)
+  }
+
   @Get('jobs/:id/rows')
   @ApiOperation({ summary: 'What an import did, row by row, for reviewing in the app' })
   async rows(
