@@ -15,7 +15,8 @@ import {
   daysUntilExpiry,
   expiryStatus,
   isSellable,
-  stockLevel,
+  sellableQuantity,
+  sellableStockLevel,
 } from '@medibridge/types'
 import { AppException } from '../common/errors/app-exception'
 import { TenantPrismaService, type TenantTx } from '../tenancy/tenant-prisma.service'
@@ -176,14 +177,20 @@ export class InventoryService {
     let stockValuePaise = 0
 
     for (const row of rows) {
-      const level = stockLevel(row)
+      /*
+       * An expired batch is reported as expired and nothing else.
+       *
+       * It has zero sellable units, so it would otherwise land in the
+       * out-of-stock tile as well and be counted twice under two headings that
+       * call for different actions — reorder it, versus get it off the shelf.
+       */
+      const expired = row.expiryDate < now
+      if (expired) continue
+
+      const level = sellableStockLevel(row, expired)
       if (level === 'lowStock') lowStock += 1
       if (level === 'outOfStock') outOfStock += 1
-      // Expired stock is not worth its price — counting it would flatter the
-      // number that a distributor is most likely to act on.
-      if (row.expiryDate >= now) {
-        stockValuePaise += availableQuantity(row) * row.sellingPricePaise
-      }
+      stockValuePaise += sellableQuantity(row, expired) * row.sellingPricePaise
     }
 
     return { totalBatches, lowStock, outOfStock, expiringSoon, expired, stockValuePaise }
@@ -538,6 +545,7 @@ function toSummary(item: {
 }): InventoryItemSummary {
   const available = availableQuantity(item)
   const status = expiryStatus(item.expiryDate)
+  const expired = status === 'expired'
 
   return {
     id: item.id,
@@ -568,14 +576,19 @@ function toSummary(item: {
 
     quantity: item.quantity,
     reservedQuantity: item.reservedQuantity,
-    availableQuantity: available,
+    /*
+     * What a retailer could actually buy. Zero once expired, however many
+     * units are physically on the shelf — the point of this number is "can
+     * this be sold", and the physical count is `quantity` right above it.
+     */
+    availableQuantity: sellableQuantity(item, expired),
     unit: item.unit,
     minOrderQuantity: item.minOrderQuantity,
     lowStockThreshold: item.lowStockThreshold,
-    stockLevel: stockLevel(item),
+    stockLevel: sellableStockLevel(item, expired),
 
     isActive: item.isActive,
-    isSellable: item.isActive && status !== 'expired' && available > 0,
+    isSellable: item.isActive && !expired && available > 0,
 
     createdAt: item.createdAt.toISOString(),
     updatedAt: item.updatedAt.toISOString(),

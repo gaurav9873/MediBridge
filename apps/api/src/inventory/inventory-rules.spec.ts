@@ -8,6 +8,8 @@ import {
   expiryStatus,
   hasMinimumShelfLife,
   isLowStock,
+  sellableQuantity,
+  sellableStockLevel,
   stockLevel,
   transferableQuantity,
 } from '@medibridge/types'
@@ -180,5 +182,38 @@ describe('moving stock between your own warehouses', () => {
   it('refuses everything when the whole batch is spoken for', () => {
     expect(transferableQuantity({ quantity: 40, reservedQuantity: 40 })).toBe(0)
     expect(canTransfer({ quantity: 40, reservedQuantity: 40 }, 1)).toBe(false)
+  })
+})
+
+describe('expired stock is not stock', () => {
+  const batch = { quantity: 160, reservedQuantity: 0, lowStockThreshold: 20 }
+
+  it('has nothing to sell however full the shelf is', () => {
+    // 160 units physically present, none of them legally sellable. Reporting
+    // 160 available is how expired medicine reaches a pharmacy.
+    expect(sellableQuantity(batch, true)).toBe(0)
+    expect(sellableQuantity(batch, false)).toBe(160)
+  })
+
+  it('reads as out of stock rather than in stock', () => {
+    expect(sellableStockLevel(batch, true)).toBe('outOfStock')
+    expect(sellableStockLevel(batch, false)).toBe('inStock')
+  })
+
+  it('leaves the physical count alone', () => {
+    // The units are still on the shelf and still have to be disposed of, so
+    // `quantity` must not be rewritten — only what may be sold changes.
+    expect(batch.quantity).toBe(160)
+  })
+
+  it('still subtracts reservations when it has not expired', () => {
+    expect(sellableQuantity({ quantity: 100, reservedQuantity: 40 }, false)).toBe(60)
+  })
+
+  it('asks for expiry rather than deciding it', () => {
+    // The parameter is a boolean, not a date, so this module never learns what
+    // makes a batch expired. A product category without expiry passes false
+    // and gets the same arithmetic.
+    expect(sellableQuantity({ quantity: 5, reservedQuantity: 0 }, false)).toBe(5)
   })
 })

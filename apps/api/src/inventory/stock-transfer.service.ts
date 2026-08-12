@@ -275,13 +275,17 @@ export class StockTransferService {
     for (const item of items) {
       const row = byWarehouse.get(item.warehouseId)
       if (!row) continue
-      const available = Math.max(0, item.quantity - item.reservedQuantity)
+
+      // Expired units are on the shelf but cannot be sold, so they count
+      // towards neither "free to sell" nor the value of what is sellable.
+      const expired = item.expiryDate < now
+      const sellable = expired ? 0 : Math.max(0, item.quantity - item.reservedQuantity)
 
       row.batches += 1
-      row.units += available
-      if (available > 0 && available <= item.lowStockThreshold) row.lowStock += 1
-      if (item.expiryDate >= now && item.expiryDate <= warning) row.expiringSoon += 1
-      if (item.expiryDate >= now) row.stockValuePaise += available * item.sellingPricePaise
+      row.units += sellable
+      if (!expired && sellable > 0 && sellable <= item.lowStockThreshold) row.lowStock += 1
+      if (!expired && item.expiryDate <= warning) row.expiringSoon += 1
+      row.stockValuePaise += sellable * item.sellingPricePaise
     }
 
     return [...byWarehouse.values()]

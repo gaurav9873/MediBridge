@@ -62,6 +62,28 @@ export function isLowStock(item: StockLevels): boolean {
 }
 
 /**
+ * What can actually be sold, once expiry is taken into account.
+ *
+ * Expiry is decided by the medicine domain, not here — hence the boolean
+ * parameter rather than a date. This module counts things; what makes a batch
+ * unsellable is somebody else's rule, and a product category without expiry
+ * dates passes `false` and gets the same arithmetic.
+ *
+ * An expired batch is not low stock or out of stock, it is expired: it has
+ * physical units that must not be sold, which is a different problem with a
+ * different fix.
+ */
+export function sellableQuantity(item: StockCounts, isExpired: boolean): number {
+  return isExpired ? 0 : availableQuantity(item)
+}
+
+/** Stock level judged on what may actually be sold. */
+export function sellableStockLevel(item: StockLevels, isExpired: boolean): StockLevel {
+  if (isExpired) return 'outOfStock'
+  return stockLevel(item)
+}
+
+/**
  * Whether stock can be corrected down to `next` without breaking a promise.
  *
  * Reserved units belong to carts that are already mid-checkout. Setting the

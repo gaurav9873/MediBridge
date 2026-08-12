@@ -123,10 +123,36 @@ module sits on both sides of it, so the rules are split accordingly:
 | `availableQuantity` | Physical stock minus what is in carts |
 | `stockLevel` | `outOfStock` / `lowStock` / `inStock` |
 | `canSetQuantityTo` | Whether a correction would oversell reserved stock |
+| `sellableQuantity` / `sellableStockLevel` | What may be sold once expiry is applied |
 | `transferableQuantity` / `canTransfer` | How much of a batch may move to another warehouse |
 
 Surgical supplies would bring their own expiry rules and reuse the counting
 unchanged. That is the point of the split.
+
+### Expiry status, and what it changes
+
+| State | When | Shown as | Sellable? |
+| ----- | ---- | -------- | --------- |
+| Normal | more than 90 days left | no badge — a row of green "Good" badges is noise that hides the two that matter | yes |
+| Expiring soon | 90 days or fewer, not yet past | amber badge with the days remaining | **yes**, right up to the day it expires |
+| Expired | expiry date has passed | red badge with how long ago | **no** |
+
+**Expired stock is not stock.** A batch past its date keeps its physical
+`quantity` — the units are on the shelf and still have to be disposed of — but
+everything that means "can this be sold" reads zero:
+
+- `availableQuantity` is 0, and `stockLevel` is `outOfStock`
+- it is excluded from a warehouse's "units free to sell" and from stock value
+- the search projection has always excluded it (`expiryDate > CURRENT_DATE`), so
+  a retailer never sees it
+- it is counted in the **expired** tile and nowhere else. Counting it as
+  out-of-stock as well would report one batch twice under two headings that
+  call for opposite actions — reorder it, versus get it off the shelf
+
+`sellableQuantity` and `sellableStockLevel` take expiry as a **boolean**, not a
+date. This module counts things; what makes a batch unsellable is the medicine
+domain's rule. A product category without expiry dates passes `false` and gets
+the same arithmetic unchanged.
 
 ### Three details worth knowing
 

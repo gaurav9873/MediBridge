@@ -46,7 +46,7 @@ useful.
 npm run typecheck          # expect: no output
 npx eslint apps packages   # expect: 0 errors (warnings are fine)
 npm run build              # expect: Tasks: 4 successful
-npm run test               # expect: Tests: 63 passed
+npm run test               # expect: Tests: 68 passed
 npm run verify:isolation   # expect: All 18 isolation checks passed
 ```
 
@@ -367,6 +367,35 @@ docker compose exec postgres psql -U medibridge -d medibridge -c \
 - [ ] Try to set the quantity **below 30** -> refused, naming the 30 units
 - [ ] Try to **remove** the batch -> refused for the same reason
 - [ ] Set it back to 0 reserved -> both work again
+
+#### Expiry status
+
+Set up all three states at once:
+
+```bash
+docker compose exec postgres psql -U medibridge -d medibridge -c \
+  "WITH picks AS (SELECT i.id, row_number() OVER (ORDER BY i.\"batchNumber\") rn
+     FROM inventory_items i JOIN warehouses w ON w.id=i.\"warehouseId\"
+     JOIN companies c ON c.id=w.\"companyId\" WHERE c.slug='medplus-wholesale')
+   UPDATE inventory_items SET \"expiryDate\" = CASE
+     WHEN p.rn=1 THEN CURRENT_DATE - 5 WHEN p.rn=2 THEN CURRENT_DATE + 30
+     WHEN p.rn=3 THEN CURRENT_DATE + 90 WHEN p.rn=4 THEN CURRENT_DATE + 91 END
+   FROM picks p WHERE inventory_items.id=p.id AND p.rn<=4;"
+```
+
+- [ ] The 91-day batch shows **no badge** — normal
+- [ ] The 90-day batch shows an amber **"90 days left"** — the boundary is
+      inclusive, so 90 warns and 91 does not
+- [ ] The 30-day batch shows amber **"30 days left"**
+- [ ] The expired batch shows a red **"Expired 5 days ago"**
+- [ ] The expired batch reads **In Stock 0**, **Out of stock**, and "Retailers
+      cannot order this" — even though its physical quantity is unchanged
+- [ ] Expiring-soon batches are still sellable, right up to the day they expire
+- [ ] The tiles count the expired batch under **Expired** only, not also under
+      Out of stock
+- [ ] `/warehouses` "units free to sell" drops by exactly the expired batch's
+      quantity, and so does stock value
+- [ ] Sign in as a retailer: the expired batch appears in no search result
 
 #### Expiring soon — `/inventory/expiring`
 
