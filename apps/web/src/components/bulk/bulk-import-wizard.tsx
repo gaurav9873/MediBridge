@@ -4,7 +4,7 @@ import type { BulkJobSummary, RowIssue } from '@medibridge/types'
 import { copy } from '@medibridge/copy'
 import { Alert, Button, notify } from '@medibridge/ui'
 import * as Dialog from '@radix-ui/react-dialog'
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { CheckCircle2, Download, FileSpreadsheet, Loader2, Upload, X } from 'lucide-react'
 import * as React from 'react'
 import { ApiClientError, api } from '@/lib/api-client'
@@ -58,6 +58,7 @@ export function BulkImportWizard({
   const [jobId, setJobId] = React.useState<string | null>(null)
   const [uploading, setUploading] = React.useState(false)
   const [uploadError, setUploadError] = React.useState<string | null>(null)
+  const queryClient = useQueryClient()
 
   // Which operations this user may run. Asked for once the wizard opens, so a
   // closed dialog costs nothing.
@@ -158,15 +159,28 @@ export function BulkImportWizard({
     }
   }
 
-  async function confirmImport(): Promise<void> {
-    if (!jobId) return
-    try {
-      await api.post(`/bulk/jobs/${jobId}/confirm`)
-      // The poll picks the new status up; no local step to set.
-    } catch (error) {
-      notify.error(error instanceof ApiClientError ? error.message : undefined)
-    }
-  }
+  /**
+   * Starts the import.
+   *
+   * The refetch afterwards is the point, not a nicety. Polling deliberately
+   * stops while a job waits at AWAITING_CONFIRMATION — there is nothing to
+   * watch — which is exactly the state this button is pressed in. Leaving the
+   * poll to notice therefore meant it never did: the server began importing
+   * and the dialog sat on the review step looking like the click did nothing.
+   *
+   * Refetching here moves the status to IMPORTING, which starts the poll again
+   * and carries the wizard to its progress step.
+   */
+  const confirm = useMutation({
+    mutationFn: () => api.post(`/bulk/jobs/${jobId}/confirm`),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['bulk', 'job', jobId] })
+      // The history behind the dialog is stale too.
+      void queryClient.invalidateQueries({ queryKey: ['bulk', 'jobs'] })
+    },
+    onError: (error) =>
+      notify.error(error instanceof ApiClientError ? error.message : undefined),
+  })
 
   const selected = options.find((option) => option.value === chosenType)
 
@@ -366,7 +380,12 @@ export function BulkImportWizard({
                     )}
 
                     <div className="flex flex-col gap-2 sm:flex-row-reverse">
-                      <Button size="lg" fullWidth onClick={() => void confirmImport()}>
+                      <Button
+                        size="lg"
+                        fullWidth
+                        loading={confirm.isPending}
+                        onClick={() => confirm.mutate()}
+                      >
                         Import {(job.createCount + job.updateCount).toLocaleString('en-IN')} rows
                       </Button>
                       <Dialog.Close asChild>
