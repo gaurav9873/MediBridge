@@ -47,8 +47,25 @@ export interface ParsedRow<TRow> {
  * The batched hooks are the key design decision. A per-row hook would issue
  * 50,000 database round trips; batched, the same work is 100 queries.
  */
+/**
+ * Whose data a bulk operation writes.
+ *
+ * `tenant` rows belong to one company and go through `runAs(companyId)`, so
+ * Row-Level Security scopes every write to the seller running the import.
+ *
+ * `platform` rows are the shared catalogue, owned by nobody and read by
+ * everybody. They carry no companyId, so the tenant policy's WITH CHECK can
+ * never pass for them — those writes must go through `runAsPlatform`, exactly
+ * as MedicineService does. Running a catalogue import under a tenant is how
+ * every row comes back "violates row-level security policy".
+ */
+export type BulkDataScope = 'tenant' | 'platform'
+
 export interface BulkHandler<TRow> {
   readonly type: BulkJobType
+
+  /** Which database scope this handler's writes need. See BulkDataScope. */
+  readonly scope: BulkDataScope
 
   /** Drives template generation, header matching and the error file. */
   readonly columns: ColumnSpec[]

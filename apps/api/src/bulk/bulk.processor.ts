@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common'
 import { BULK_LIMITS, BulkJobStatus, type RowIssue } from '@medibridge/types'
-import { TenantPrismaService } from '../tenancy/tenant-prisma.service'
+import { TenantPrismaService, type TenantTx } from '../tenancy/tenant-prisma.service'
 import type { AnyBulkHandler, BulkScope, ParsedRow } from './handlers/bulk-handler'
 import { BulkHandlerRegistry } from './handlers/registry'
 import { batched, openRowReader } from './parsing/row-reader'
@@ -140,7 +140,7 @@ export class BulkProcessor {
         }
 
         // --- business validation, batched ---
-        const issues = await this.db.runAs(job.companyId, (tx) =>
+        const issues = await this.inHandlerScope(handler, job.companyId, (tx) =>
           handler.validateBatch(parsed, scope, tx),
         )
         const failedRowNumbers = new Set(issues.map((issue) => issue.rowNumber))
@@ -160,7 +160,7 @@ export class BulkProcessor {
         // --- classify what survived ---
         const survivors = parsed.filter((row) => !failedRowNumbers.has(row.rowNumber))
         if (survivors.length > 0) {
-          const plans = await this.db.runAs(job.companyId, (tx) =>
+          const plans = await this.inHandlerScope(handler, job.companyId, (tx) =>
             handler.classifyBatch(survivors, scope, tx),
           )
           for (const plan of plans) {
@@ -222,9 +222,19 @@ export class BulkProcessor {
     const handler = this.registry.get(job.type)
     const scope = await this.buildScope(job)
 
-    // Resume support: skip everything already applied. processedRows is the
-    // checkpoint, written after every batch.
-    const resumeFrom = job.status === BulkJobStatus.PAUSED ? job.processedRows : 0
+    /*
+     * Resume support: skip everything already applied. processedRows is the
+     * checkpoint, written after every batch.
+     *
+     * FAILED counts as resumable as well as PAUSED. A job that died partway
+     * has already written the rows before the checkpoint, and re-running the
+     * whole file would either duplicate them or make the user delete work by
+     * hand. Picking up where it stopped is what "import the rest" means.
+     */
+    const resumeFrom =
+      job.status === BulkJobStatus.PAUSED || job.status === BulkJobStatus.FAILED
+        ? job.processedRows
+        : 0
     if (resumeFrom > 0) this.logger.log(`Resuming ${jobId} from row ${resumeFrom}`)
 
     await this.setStatus(
@@ -235,6 +245,7 @@ export class BulkProcessor {
 
     const counts = { create: 0, update: 0, skip: 0, error: 0 }
     const outcomes: Array<{ rowNumber: number; key: string; action: string; detail?: string }> = []
+    const failedRows: Array<{ raw: Record<string, string>; message: string }> = []
     let processed = resumeFrom
 
     try {
@@ -272,7 +283,7 @@ export class BulkProcessor {
          */
         const blocked = new Set<number>()
         if (parsed.length > 0) {
-          const issues = await this.db.runAs(job.companyId, (tx) =>
+          const issues = await this.inHandlerScope(handler, job.companyId, (tx) =>
             handler.validateBatch(parsed, scope, tx),
           )
           for (const issue of issues) {
@@ -280,6 +291,7 @@ export class BulkProcessor {
             counts.error += 1
             const source = parsed.find((row) => row.rowNumber === issue.rowNumber)
             await this.recordError(jobId, { ...issue, rawRow: source?.raw })
+            failedRows.push({ raw: source?.raw ?? {}, message: issue.message })
             outcomes.push({
               rowNumber: issue.rowNumber,
               key: source ? handler.naturalKey(source.data, scope) : String(issue.rowNumber),
@@ -324,6 +336,25 @@ export class BulkProcessor {
         await this.reports.writeResultFile(resultFileKey, arrayToAsync(outcomes))
       }
 
+      /*
+       * The failed rows, again, in template format.
+       *
+       * The validate pass writes this file too, but a row can survive the
+       * preview and still fail here — the database moved on, or the write
+       * itself was refused. Without this, a job whose errors all arose during
+       * the import reports a row count nobody can download, which is exactly
+       * what "Failed rows" is for.
+       */
+      let applyErrorFileKey: string | null = null
+      if (failedRows.length > 0) {
+        applyErrorFileKey = this.storage.buildKey({ scope: 'bulk', id: jobId, name: 'errors.csv' })
+        await this.reports.writeErrorFile(
+          applyErrorFileKey,
+          handler.columns,
+          arrayToAsync(failedRows),
+        )
+      }
+
       const finalStatus =
         counts.error > 0 ? BulkJobStatus.COMPLETED_WITH_ERRORS : BulkJobStatus.COMPLETED
 
@@ -338,6 +369,7 @@ export class BulkProcessor {
           skipCount: counts.skip,
           errorCount: { increment: counts.error },
           resultFileKey,
+          ...(applyErrorFileKey ? { errorFileKey: applyErrorFileKey } : {}),
           finishedAt: new Date(),
         },
       }),
@@ -391,7 +423,9 @@ export class BulkProcessor {
     outcomes: Array<{ rowNumber: number; key: string; action: string; detail?: string }>,
   ): Promise<{ created: number; updated: number; skipped: number; issues: RowIssue[] }> {
     try {
-      const result = await this.db.runAs(companyId, (tx) => handler.applyBatch(rows, scope, tx))
+      const result = await this.inHandlerScope(handler, companyId, (tx) =>
+        handler.applyBatch(rows, scope, tx),
+      )
 
       for (const issue of result.issues) {
         await this.recordError(jobId, issue)
@@ -417,7 +451,7 @@ export class BulkProcessor {
 
       for (const row of rows) {
         try {
-          const single = await this.db.runAs(companyId, (tx) =>
+          const single = await this.inHandlerScope(handler, companyId, (tx) =>
             handler.applyBatch([row], scope, tx),
           )
           created += single.created
@@ -448,6 +482,28 @@ export class BulkProcessor {
   // -------------------------------------------------------------------------
   // Helpers
   // -------------------------------------------------------------------------
+
+
+  /**
+   * Runs a handler's own database work in the scope its data needs.
+   *
+   * Tenant handlers go through `runAs(companyId)` so Row-Level Security scopes
+   * every write to the seller. Platform handlers — the shared catalogue —
+   * carry no companyId, so the tenant policy can never pass for them and they
+   * need the deliberate bypass, exactly as MedicineService uses.
+   *
+   * Running a catalogue import under a tenant is what made every row come back
+   * "new row violates row-level security policy for table medicines".
+   */
+  private inHandlerScope<T>(
+    handler: AnyBulkHandler,
+    companyId: string,
+    fn: (tx: TenantTx) => Promise<T>,
+  ): Promise<T> {
+    return handler.scope === 'platform'
+      ? this.db.runAsPlatform(`bulk ${handler.type}`, fn)
+      : this.db.runAs(companyId, fn)
+  }
 
   private async loadJob(jobId: string) {
     return this.db.runAsPlatform('load a bulk job by id', (tx) =>

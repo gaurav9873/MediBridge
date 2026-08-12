@@ -199,9 +199,17 @@ export class BulkService {
     return this.getJob(jobId, user)
   }
 
+  /**
+   * Picks a job back up from its checkpoint.
+   *
+   * Allowed from FAILED as well as PAUSED. A job that died partway has already
+   * written everything before `processedRows`, so re-uploading the whole file
+   * would duplicate that work — resuming imports only what is left, which is
+   * what somebody staring at a half-finished import actually wants.
+   */
   async resume(jobId: string, user: SessionUser): Promise<BulkJobSummary> {
     const job = await this.requireJob(jobId, user)
-    if (job.status !== BulkJobStatus.PAUSED) {
+    if (job.status !== BulkJobStatus.PAUSED && job.status !== BulkJobStatus.FAILED) {
       throw new AppException(ApiErrorCode.INVALID_STATUS_TRANSITION)
     }
     // The processor reads PAUSED to know it is resuming and where from.
@@ -376,7 +384,7 @@ function toSummary(job: {
     failureReason: job.failureReason,
     canConfirm: status === BulkJobStatus.AWAITING_CONFIRMATION,
     canPause: ACTIVE_BULK_STATUSES.includes(status),
-    canResume: status === BulkJobStatus.PAUSED,
+    canResume: status === BulkJobStatus.PAUSED || status === BulkJobStatus.FAILED,
     canCancel: !TERMINAL_BULK_STATUSES.includes(status),
   }
 }

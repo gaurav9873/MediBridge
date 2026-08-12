@@ -179,6 +179,8 @@ type MedicineRow = z.infer<typeof rowSchema>
 @Injectable()
 export class MedicineImportHandler implements BulkHandler<MedicineRow> {
   readonly type = BulkJobType.MEDICINE_IMPORT
+  /** The shared catalogue belongs to the platform, not to the admin running the import. */
+  readonly scope = 'platform' as const
   readonly columns = columns
   readonly templateSheetName = 'Medicines'
   readonly rowSchema = rowSchema

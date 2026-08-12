@@ -151,6 +151,8 @@ type StockRow = z.infer<typeof rowSchema>
 @Injectable()
 export class InventoryStockUpdateHandler implements BulkHandler<StockRow> {
   readonly type = BulkJobType.INVENTORY_STOCK_UPDATE
+  /** Stock belongs to the seller running the import. */
+  readonly scope = 'tenant' as const
   readonly columns = columns
   readonly templateSheetName = 'Stock Update'
   readonly rowSchema = rowSchema

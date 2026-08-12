@@ -14,12 +14,15 @@ import {
   StatusBadge,
   type StatusTone,
   StickyActionBar,
+  notify,
 } from '@medibridge/ui'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { FileSpreadsheet, Upload } from 'lucide-react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { CheckCircle2, Download, FileSpreadsheet, Play, Upload } from 'lucide-react'
 import * as React from 'react'
 import { BulkImportWizard } from '@/components/bulk/bulk-import-wizard'
 import { ApiClientError, api } from '@/lib/api-client'
+
+const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4100/api/v1'
 
 const c = copy.inventory.bulkUpload
 
@@ -55,6 +58,14 @@ function formatDate(iso: string): string {
 export default function DistributorImportsPage(): React.JSX.Element {
   const queryClient = useQueryClient()
   const [wizardOpen, setWizardOpen] = React.useState(false)
+
+  const act = useMutation({
+    mutationFn: ({ id, action }: { id: string; action: string }) =>
+      api.post(`/bulk/jobs/${id}/${action}`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['bulk', 'jobs'] }),
+    onError: (mutationError) =>
+      notify.error(mutationError instanceof ApiClientError ? mutationError.message : undefined),
+  })
 
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['bulk', 'jobs'],
@@ -116,6 +127,47 @@ export default function DistributorImportsPage(): React.JSX.Element {
       header: 'When',
       mobile: 'hidden',
       render: (job) => <span className="text-sm">{formatDate(job.queuedAt)}</span>,
+    },
+    {
+      key: 'actions',
+      header: '',
+      render: (job) => (
+        <div className="flex flex-wrap justify-end gap-2">
+          {job.canConfirm && (
+            <Button
+              size="md"
+              icon={<CheckCircle2 />}
+              onClick={() => act.mutate({ id: job.id, action: 'confirm' })}
+            >
+              {c.confirmImport}
+            </Button>
+          )}
+          {job.canResume && (
+            <Button
+              size="md"
+              variant="secondary"
+              icon={<Play />}
+              onClick={() => act.mutate({ id: job.id, action: 'resume' })}
+            >
+              {job.status === 'FAILED' ? c.importTheRest : c.resume}
+            </Button>
+          )}
+          {job.hasErrorFile && (
+            <Button asChild variant="secondary" size="md">
+              <a href={`${API}/bulk/jobs/${job.id}/errors.csv`} download>
+                <Download className="size-5" aria-hidden /> {c.failedRows}
+              </a>
+            </Button>
+          )}
+          {job.hasResultFile && (
+            <Button asChild variant="ghost" size="md">
+              <a href={`${API}/bulk/jobs/${job.id}/result.csv`} download>
+                <Download className="size-5" aria-hidden /> {c.fullReport}
+              </a>
+            </Button>
+          )}
+        </div>
+      ),
     },
   ]
 

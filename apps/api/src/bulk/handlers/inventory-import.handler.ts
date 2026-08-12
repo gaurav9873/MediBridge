@@ -189,6 +189,8 @@ interface MedicineMatch {
 @Injectable()
 export class InventoryImportHandler implements BulkHandler<ImportRow> {
   readonly type = BulkJobType.INVENTORY_IMPORT
+  /** Stock belongs to the seller running the import. */
+  readonly scope = 'tenant' as const
   readonly columns = columns
   readonly templateSheetName = 'Stock Import'
   readonly rowSchema = rowSchema

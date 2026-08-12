@@ -298,7 +298,9 @@ function JobActions({
           icon={<Play />}
           onClick={() => act.mutate({ id: job.id, action: 'resume' })}
         >
-          Resume
+          {/* A failed job resumes from its checkpoint, so the honest word is
+              not "resume" but "carry on with what is left". */}
+          {job.status === 'FAILED' ? 'Import the rest' : 'Resume'}
         </Button>
       )}
       {job.hasErrorFile && (

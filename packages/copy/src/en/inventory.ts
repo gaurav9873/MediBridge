@@ -367,6 +367,11 @@ export const inventory = {
       ],
     } satisfies PageHelp,
     historyHeading: 'Recent uploads',
+    resume: 'Resume',
+    /** A failed job restarts from its checkpoint, not from the top. */
+    importTheRest: 'Import the rest',
+    failedRows: 'Failed rows',
+    fullReport: 'Full report',
     historyEmpty: {
       title: 'You have not uploaded anything yet',
       body: 'Upload a spreadsheet to add or update a lot of stock at once. We check every row and show you what will happen before anything is saved.',
