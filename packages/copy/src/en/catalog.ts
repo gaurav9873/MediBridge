@@ -62,6 +62,24 @@ export const catalog = {
     outOfStock: 'Out of Stock',
     notifyMe: 'Tell Me When Available',
     compareDistributors: (count: number) => `Compare ${count} distributors`,
+    /** The whole point of the screen, said plainly. */
+    bestPrice: 'Best price',
+    sellersNearYou: (count: number) =>
+      count === 0
+        ? 'No distributors deliver to your shop yet'
+        : count === 1
+          ? '1 distributor delivers to your shop'
+          : `${count} distributors deliver to your shop`,
+    sameDayTag: 'Same-Day',
+    nextDayTag: 'Next-Day',
+    offersHeading: (count: number) =>
+      count === 1 ? 'Available from 1 distributor' : `Available from ${count} distributors`,
+    showOffers: 'Compare prices',
+    hideOffers: 'Hide prices',
+    availableUnits: (count: number) => `${count.toLocaleString('en-IN')} available`,
+    /** Buying arrives in the next phase; say so rather than showing a dead button. */
+    cartComingSoon:
+      'Ordering opens soon. For now you can compare what every distributor near you charges.',
     empty: {
       title: 'Start by searching for a medicine',
       body: 'Type a name, brand or salt in the search box above. We will show you every distributor near your shop who has it in stock.',

@@ -2,7 +2,7 @@
 
 import { copy } from '@medibridge/copy'
 import { Alert, Button, Card, CardBody, CardHeader, PageShell, Skeleton } from '@medibridge/ui'
-import { Building2, FlaskConical, LogOut, ShieldCheck, UserCog, Users } from 'lucide-react'
+import { Building2, FlaskConical, LogOut, Search, ShieldCheck, UserCog, Users } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import * as React from 'react'
 import { AccountSessions } from '@/components/account-sessions'
@@ -151,10 +151,25 @@ export default function AccountPage(): React.JSX.Element {
 
         <AccountSessions />
 
+        {/* Retailers now have a place to shop; send them to it. */}
+        {user.role === 'RETAILER' && (
+          <Card>
+            <CardHeader
+              title={copy.catalog.search.page.title}
+              description={copy.catalog.search.page.subtitle}
+              action={
+                <Button icon={<Search />} onClick={() => router.push('/search')}>
+                  {copy.common.nav.search}
+                </Button>
+              }
+            />
+          </Card>
+        )}
+
         <Card>
           <CardHeader
             title="Coming next"
-            description="Search, cart, checkout and order tracking arrive in Phases 3 and 4."
+            description="Cart, checkout and order tracking arrive later in Phase 3."
           />
         </Card>
 

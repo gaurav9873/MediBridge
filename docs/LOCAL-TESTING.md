@@ -1,4 +1,4 @@
-# Local testing — Phases 2 and 3.1–3.4
+# Local testing — Phases 2 and 3.1–3.5
 
 Everything below runs on your machine. No staging, no cloud, no accounts to
 create anywhere.
@@ -466,7 +466,36 @@ As `9000000010`, go to `/imports`.
 - [ ] Upload the same file again -> every row is now skipped, so a re-upload is
       safe
 
-### 4.9 Mobile layout
+### 4.9 Search — Phase 3.5
+
+Sign in as `9000000020` (Sharma Medical, Pune) at `/login`, then `/search`.
+
+- [ ] Before you type anything, the screen invites you to search rather than
+      showing an empty table
+- [ ] Type `paracetamol` -> results appear, with "2 distributors deliver to your shop"
+- [ ] **Crocin Advance** shows a best price and how far below MRP it is
+- [ ] **Compare prices** opens the sellers, cheapest first, with the cheapest
+      tagged **Best price**
+- [ ] Wellness (125 km) reads **Next-Day**; MedPlus (5 km) reads **Same-Day** —
+      the cheaper one is the slower one, which is the whole point
+- [ ] Each offer shows distance, units available, expiry and minimum order
+- [ ] Tick **Delivery Speed** -> only medicines somebody can deliver Same-Day
+- [ ] Sort by **Price: low to high** and by **Fastest delivery** -> the order changes
+- [ ] Search `zzzz` -> "No medicines found", not an error
+- [ ] Nothing offers to add to a cart yet, and the banner says why
+
+Then check the results are honest:
+
+```bash
+docker compose exec postgres psql -U medibridge -d medibridge -c \
+  "UPDATE inventory_items SET \"expiryDate\" = CURRENT_DATE - 1
+   WHERE \"batchNumber\" = 'CRA24A091';"
+```
+
+- [ ] Search `crocin` again -> MedPlus's offer is gone, because expired stock
+      never reaches the projection. Re-seed afterwards.
+
+### 4.10 Mobile layout
 
 The quickest honest check is a real phone-sized viewport, not a narrow window.
 
@@ -483,6 +512,7 @@ reachable with a thumb:
 - [ ] a medicine's edit, duplicates and merge screens
 - [ ] `/inventory`, `/inventory/new`, `/inventory/expiring`, and a batch's edit screen
 - [ ] `/warehouses`, including the Move Stock dialog
+- [ ] `/search` as a retailer, including an expanded price comparison
 - [ ] `/imports`, including the upload wizard
 
 Then repeat at **iPad (768px)** and a normal desktop window.
@@ -527,7 +557,7 @@ docker compose exec postgres psql -U medibridge -d medibridge -t -c \
 
 Do not report these as bugs:
 
-- **No ordering or search screens.** Medicine master (3.1), inventory (3.2), warehouse transfers (3.3) and bulk uploads (3.4) are built; search is 3.5 and the rest follows.
+- **No ordering.** Medicine master (3.1), inventory (3.2), warehouse transfers (3.3), bulk uploads (3.4) and search (3.5) are built. Cart is 3.6, orders 3.7, payments 3.8, delivery 3.9, notifications 3.10. Cart and Orders show as "Soon" in the retailer menu.
 - **The bulk worker must be running** for any upload to progress. It is a separate process: `npm run worker -w @medibridge/api`.
 - **Inventory has no bulk edit and no stock history screen.** See [INVENTORY.md](INVENTORY.md#known-limitations) for that module's full list.
 - **Medicine list sorting is fixed** at name A–Z, and page size at 25. The API supports neither a sort parameter nor a page-size control yet. See [MEDICINE-MASTER.md](MEDICINE-MASTER.md#known-limitations) for the full list of that module's limitations.
@@ -584,12 +614,12 @@ otherwise you are testing the previous build and will not know it.
 
 ## 7. What "done" looks like
 
-Phases 2 and 3.1–3.4 pass locally when:
+Phases 2 and 3.1–3.5 pass locally when:
 
 - all five automated checks pass
 - every box in section 4 is ticked
 - nothing scrolls sideways at 375px, 390px, 768px or 1280px
 - one tenant cannot see another's anything — including medicine requests and stock transfers
 
-At that point Phase 3.5 can start: search, then cart, orders, payments,
-delivery and notifications in that order.
+At that point Phase 3.6 can start: cart, then orders, payments, delivery and
+notifications in that order.
